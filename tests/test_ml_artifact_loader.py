@@ -17,6 +17,7 @@ sys.modules.setdefault("homeassistant.core", core)
 
 from custom_components.calibrated_logistic_regression.ml_artifact import (
     load_latest_clr_model_artifact,
+    load_latest_lightgbm_model_artifact,
 )
 
 
@@ -68,3 +69,54 @@ def test_load_latest_clr_model_artifact_parses_coefficients_and_intercept(
     assert artifact.coefficients == {"sensor.a": 0.25, "sensor.b": -0.1}
     assert artifact.feature_names == ["sensor.a", "sensor.b"]
     assert artifact.model_type == "sklearn_logistic_regression"
+
+
+def test_load_latest_lightgbm_model_artifact_parses_payload(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "ha_ml_data_layer.db"
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.executescript(
+            """
+            CREATE TABLE clr_model_artifacts (
+                id INTEGER PRIMARY KEY,
+                created_at_utc TEXT NOT NULL,
+                model_type TEXT NOT NULL,
+                feature_set_version TEXT NOT NULL,
+                artifact_json TEXT NOT NULL
+            );
+            CREATE VIEW vw_clr_latest_model_artifact AS
+            SELECT *
+            FROM clr_model_artifacts
+            ORDER BY created_at_utc DESC, id DESC
+            LIMIT 1;
+            """
+        )
+        artifact_json = json.dumps(
+            {
+                "model": {
+                    "type": "lightgbm_binary_classifier",
+                    "intercept": -1.25,
+                    "weights": [0.5, 0.25],
+                },
+                "feature_names": ["event_count", "on_ratio"],
+            }
+        )
+        conn.execute(
+            """
+            INSERT INTO clr_model_artifacts(created_at_utc, model_type, feature_set_version, artifact_json)
+            VALUES ('2026-02-25T00:00:00+00:00', 'lightgbm_binary_classifier', 'v2', ?)
+            """,
+            (artifact_json,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    artifact = load_latest_lightgbm_model_artifact(str(db_path))
+    assert artifact.model_type == "lightgbm_binary_classifier"
+    assert artifact.feature_set_version == "v2"
+    assert artifact.feature_names == ["event_count", "on_ratio"]
+    assert artifact.model_payload["type"] == "lightgbm_binary_classifier"
+    assert artifact.model_payload["intercept"] == -1.25

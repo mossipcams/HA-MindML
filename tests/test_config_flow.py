@@ -66,6 +66,7 @@ def test_wizard_happy_path_creates_entry_from_entities_states_and_threshold() ->
     assert preview_result["data"]["ml_artifact_view"] == "vw_clr_latest_model_artifact"
     assert preview_result["data"]["ml_feature_source"] == "hass_state"
     assert preview_result["data"]["ml_feature_view"] == "vw_latest_feature_snapshot"
+    assert preview_result["data"]["model_type"] == "lightgbm"
 
 
 def test_user_step_aborts_duplicate_name() -> None:
@@ -137,8 +138,9 @@ def test_options_flow_shows_management_menu() -> None:
     result = asyncio.run(flow.async_step_init())
 
     assert result["type"] == "menu"
-    assert "threshold" in result["menu_options"]
     assert "model" in result["menu_options"]
+    assert "feature_source" in result["menu_options"]
+    assert "decision" in result["menu_options"]
 
 
 def test_options_flow_threshold_updates_value() -> None:

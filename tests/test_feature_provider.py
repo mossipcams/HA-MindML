@@ -11,13 +11,14 @@ config_entries = types.ModuleType("homeassistant.config_entries")
 core = types.ModuleType("homeassistant.core")
 config_entries.ConfigEntry = object
 core.HomeAssistant = object
-sys.modules["homeassistant"] = homeassistant
-sys.modules["homeassistant.config_entries"] = config_entries
-sys.modules["homeassistant.core"] = core
+sys.modules.setdefault("homeassistant", homeassistant)
+sys.modules.setdefault("homeassistant.config_entries", config_entries)
+sys.modules.setdefault("homeassistant.core", core)
 
 from custom_components.calibrated_logistic_regression.feature_provider import (
     FeatureVectorResult,
     HassStateFeatureProvider,
+    RealtimeHistoryFeatureProvider,
     SqliteSnapshotFeatureProvider,
 )
 
@@ -111,3 +112,26 @@ def test_sqlite_snapshot_feature_provider_reads_latest_feature_values(tmp_path: 
     assert vector.feature_values == {"event_count": 7.0}
     assert vector.missing_features == ["on_ratio"]
     assert vector.mapped_state_values == {}
+
+
+def test_realtime_history_feature_provider_combines_state_and_history_features() -> None:
+    hass = MagicMock()
+    hass.states.get.side_effect = lambda entity_id: {
+        "sensor.temp": _State("21.5"),
+    }.get(entity_id)
+
+    provider = RealtimeHistoryFeatureProvider(
+        hass=hass,
+        required_features=["sensor.temp", "minutes_since_motion"],
+        feature_types={"sensor.temp": "numeric", "minutes_since_motion": "numeric"},
+        state_mappings={},
+        history_feature_loader=lambda required: {"minutes_since_motion": 12.0},
+    )
+
+    vector = provider.load()
+
+    assert vector.feature_values == {
+        "sensor.temp": 21.5,
+        "minutes_since_motion": 12.0,
+    }
+    assert vector.missing_features == []

@@ -21,6 +21,7 @@ from .const import (
     CONF_ML_DB_PATH,
     CONF_ML_FEATURE_SOURCE,
     CONF_ML_FEATURE_VIEW,
+    CONF_MODEL_TYPE,
     CONF_NAME,
     CONF_REQUIRED_FEATURES,
     CONF_STATE_MAPPINGS,
@@ -28,14 +29,21 @@ from .const import (
     DEFAULT_ML_ARTIFACT_VIEW,
     DEFAULT_ML_FEATURE_SOURCE,
     DEFAULT_ML_FEATURE_VIEW,
+    DEFAULT_MODEL_TYPE,
     DEFAULT_THRESHOLD,
 )
 from .feature_provider import (
-    HassStateFeatureProvider,
+    RealtimeHistoryFeatureProvider,
     SqliteSnapshotFeatureProvider,
 )
 from .inference import CalibrationSpec, ModelSpec, run_inference
-from .model_provider import ManualModelProvider, SqliteArtifactModelProvider
+from .lightgbm_inference import LightGBMModelSpec, run_lightgbm_inference
+from .model_provider import (
+    ManualModelProvider,
+    ModelProviderResult,
+    SqliteArtifactModelProvider,
+    SqliteLightGBMModelProvider,
+)
 
 
 async def async_setup_entry(
@@ -62,6 +70,9 @@ class CalibratedLogisticRegressionSensor(SensorEntity):
         config.update(entry.options)
 
         self._name = str(config.get(CONF_NAME, entry.title or "CLR Probability"))
+        self._model_runtime = str(config.get(CONF_MODEL_TYPE, DEFAULT_MODEL_TYPE)).strip().casefold()
+        if self._model_runtime not in {"clr", "lightgbm"}:
+            self._model_runtime = DEFAULT_MODEL_TYPE
         manual_intercept = float(config.get(CONF_INTERCEPT, 0.0))
         manual_coefficients: dict[str, float] = {
             entity_id: float(weight)
@@ -78,30 +89,59 @@ class CalibratedLogisticRegressionSensor(SensorEntity):
             config.get(CONF_ML_FEATURE_VIEW, DEFAULT_ML_FEATURE_VIEW)
         ).strip() or DEFAULT_ML_FEATURE_VIEW
 
-        model_provider = ManualModelProvider(
-            intercept=manual_intercept,
-            coefficients=manual_coefficients,
-        )
-        if self._ml_db_path:
-            model_provider = SqliteArtifactModelProvider(
+        if self._model_runtime == "lightgbm":
+            model_provider = SqliteLightGBMModelProvider(
                 db_path=self._ml_db_path,
                 artifact_view=self._ml_artifact_view,
-                fallback_intercept=manual_intercept,
-                fallback_coefficients=manual_coefficients,
+                fallback_feature_names=list(manual_coefficients.keys()),
             )
+            if not self._ml_db_path:
+                manual_model = LightGBMModelSpec(
+                    feature_names=list(manual_coefficients.keys()),
+                    model_payload={
+                        "intercept": manual_intercept,
+                        "weights": [manual_coefficients[name] for name in manual_coefficients],
+                    },
+                )
+                model_result = ModelProviderResult(
+                    model=manual_model,
+                    source="manual",
+                    artifact_error=None,
+                    artifact_meta={},
+                )
+            else:
+                model_result = model_provider.load()
+        else:
+            model_provider = ManualModelProvider(
+                intercept=manual_intercept,
+                coefficients=manual_coefficients,
+            )
+            if self._ml_db_path:
+                model_provider = SqliteArtifactModelProvider(
+                    db_path=self._ml_db_path,
+                    artifact_view=self._ml_artifact_view,
+                    fallback_intercept=manual_intercept,
+                    fallback_coefficients=manual_coefficients,
+                )
+            model_result = model_provider.load()
 
-        model_result = model_provider.load()
-        self._model: ModelSpec = model_result.model
+        self._model: ModelSpec | LightGBMModelSpec = model_result.model
         self._model_source = model_result.source
         self._model_artifact_error = model_result.artifact_error
         self._model_artifact_meta: dict[str, Any] = dict(model_result.artifact_meta)
 
-        default_required = list(self._model.coefficients.keys())
+        if isinstance(self._model, ModelSpec):
+            default_required = list(self._model.coefficients.keys())
+        else:
+            default_required = list(self._model.feature_names)
         self._required_features: list[str] = list(
             config.get(CONF_REQUIRED_FEATURES, default_required)
         )
         if self._model_source == "ml_data_layer":
-            self._required_features = list(self._model.coefficients.keys())
+            if isinstance(self._model, ModelSpec):
+                self._required_features = list(self._model.coefficients.keys())
+            else:
+                self._required_features = list(self._model.feature_names)
 
         self._feature_types: dict[str, str] = {
             feature_id: str(feature_type).strip().casefold()
@@ -133,11 +173,12 @@ class CalibratedLogisticRegressionSensor(SensorEntity):
             )
         else:
             self._ml_feature_source = "hass_state"
-            self._feature_provider = HassStateFeatureProvider(
+            self._feature_provider = RealtimeHistoryFeatureProvider(
                 hass=self.hass,
                 required_features=self._required_features,
                 feature_types=self._feature_types,
                 state_mappings=self._state_mappings,
+                history_feature_loader=lambda required: {},
             )
 
         self._attr_name = self._name
@@ -217,6 +258,7 @@ class CalibratedLogisticRegressionSensor(SensorEntity):
             "is_above_threshold": self._is_above_threshold,
             "decision": self._decision,
             "model_source": self._model_source,
+            "model_runtime": self._model_runtime,
             "model_artifact_error": self._model_artifact_error,
             "model_artifact_meta": dict(self._model_artifact_meta),
             "feature_source": self._ml_feature_source,
@@ -249,13 +291,21 @@ class CalibratedLogisticRegressionSensor(SensorEntity):
         self._missing_features = list(feature_vector.missing_features)
         self._last_computed_at = now.astimezone(UTC).isoformat()
 
-        result = run_inference(
-            feature_values=self._feature_values,
-            missing_features=self._missing_features,
-            model=self._model,
-            calibration=self._calibration,
-            threshold=self._threshold,
-        )
+        if self._model_runtime == "lightgbm":
+            result = run_lightgbm_inference(
+                feature_values=self._feature_values,
+                missing_features=self._missing_features,
+                model=self._model if isinstance(self._model, LightGBMModelSpec) else LightGBMModelSpec(feature_names=list(self._feature_values.keys()), model_payload={}),
+                threshold=self._threshold,
+            )
+        else:
+            result = run_inference(
+                feature_values=self._feature_values,
+                missing_features=self._missing_features,
+                model=self._model if isinstance(self._model, ModelSpec) else ModelSpec(intercept=0.0, coefficients={}),
+                calibration=self._calibration,
+                threshold=self._threshold,
+            )
         self._available = result.available
         self._native_value = result.native_value
         self._raw_probability = result.raw_probability

@@ -190,19 +190,34 @@ def test_sensor_can_load_model_from_ml_data_layer(monkeypatch) -> None:
     }.get(entity_id)
 
     entry = _build_entry()
+    entry.data["model_type"] = "clr"
     entry.data["ml_db_path"] = "/tmp/ha_ml_data_layer.db"
     entry.data["ml_artifact_view"] = "vw_clr_latest_model_artifact"
 
+    class _Provider:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+        def load(self):
+            from custom_components.calibrated_logistic_regression.inference import ModelSpec
+            from custom_components.calibrated_logistic_regression.model_provider import (
+                ModelProviderResult,
+            )
+
+            return ModelProviderResult(
+                model=ModelSpec(intercept=-1.0, coefficients={"sensor.a": 1.0, "sensor.b": 0.0}),
+                source="ml_data_layer",
+                artifact_error=None,
+                artifact_meta={
+                    "model_type": "sklearn_logistic_regression",
+                    "feature_set_version": "v1",
+                    "created_at_utc": "2026-02-25T00:00:00+00:00",
+                },
+            )
+
     monkeypatch.setattr(
-        "custom_components.calibrated_logistic_regression.sensor.load_latest_clr_model_artifact",
-        lambda db_path, artifact_view: ClrModelArtifact(
-            intercept=-1.0,
-            coefficients={"sensor.a": 1.0, "sensor.b": 0.0},
-            feature_names=["sensor.a", "sensor.b"],
-            model_type="sklearn_logistic_regression",
-            feature_set_version="v1",
-            created_at_utc="2026-02-25T00:00:00+00:00",
-        ),
+        "custom_components.calibrated_logistic_regression.sensor.SqliteArtifactModelProvider",
+        _Provider,
     )
 
     sensor = CalibratedLogisticRegressionSensor(hass, entry)

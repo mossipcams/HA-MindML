@@ -1,17 +1,18 @@
-# Calibrated Logistic Regression Sensor (Home Assistant)
+# ML Probability Sensor (Home Assistant)
 
-Custom integration that exposes a calibrated logistic regression output as a Home Assistant sensor.
+Custom integration that exposes a probability output as a Home Assistant sensor, with LightGBM runtime support and legacy CLR compatibility.
 
-## UX Overhaul Highlights
+## UX Highlights
 
 - Multi-step setup wizard (instead of one raw JSON screen)
-- Guided post-setup management menu in options flow
+- Guided post-setup management sections in options flow (`Model`, `Feature Source`, `Decision`)
 - Built-in categorical state mapping for non-numeric entities
 - Explainability attributes for runtime transparency and debugging
 
 ## Setup Wizard Steps
 
 1. **Name & Goal**: define sensor name and what probability represents.
+2. **Model Runtime**: choose `LightGBM` (default) or legacy `CLR`.
 2. **Features**: pick feature entities with the Home Assistant entity selector.
 3. **Mappings (if needed)**: review or override inferred mappings for categorical features.
 4. **Model**: provide intercept, coefficients, and calibration values.
@@ -21,9 +22,11 @@ Custom integration that exposes a calibrated logistic regression output as a Hom
 
 Open the integration options and choose:
 
+- **Model**: select runtime and artifact source
+- **Feature Source**: choose real-time HA state mode or ML snapshot mode
+- **Decision**: tune threshold/calibration
 - **Features**: edit required feature entity IDs
 - **Mappings**: adjust categorical state-to-number mappings
-- **Calibration**: tune slope/intercept
 - **Diagnostics**: see feature coverage context
 
 ## Configuration Inputs (Stored)
@@ -37,6 +40,9 @@ Open the integration options and choose:
 - `coefficients`: Feature weight map
 - `calibration_slope`: Calibration slope (default `1.0`)
 - `calibration_intercept`: Calibration intercept (default `0.0`)
+- `model_type`: `lightgbm` (default) or `clr`
+- `ml_feature_source`: `hass_state` or `ml_snapshot`
+- `ml_feature_view`: snapshot view name for ML feature mode
 
 `state_mappings` example:
 
@@ -63,8 +69,8 @@ Open the integration options and choose:
 The runtime pipeline is now split into three layers:
 
 - `model_provider`: loads coefficients/intercept from manual config or ML artifact contract view.
-- `feature_provider`: builds the feature vector from either live HA states or ML latest-feature snapshot view.
-- `inference`: pure probability/decision math (logistic + calibration + threshold).
+- `feature_provider`: builds the feature vector from live HA states, optional history-derived runtime features, or ML latest-feature snapshot view.
+- `inference`: runtime strategy layer for both CLR and LightGBM-compatible scoring.
 
 This separation keeps the sensor entity focused on orchestration and makes it easier to evolve with `ha_ml_data_layer` contract changes.
 

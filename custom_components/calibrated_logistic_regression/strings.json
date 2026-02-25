@@ -7,8 +7,11 @@
         "data": {
           "name": "Name",
           "goal": "Probability goal",
+          "model_type": "Model runtime",
           "ml_db_path": "ML DB path (optional)",
-          "ml_artifact_view": "ML artifact view"
+          "ml_artifact_view": "ML artifact view",
+          "ml_feature_source": "Runtime feature source",
+          "ml_feature_view": "Feature snapshot view"
         }
       },
       "features": {
@@ -72,10 +75,28 @@
         }
       },
       "model": {
-        "title": "Manage ML Model Source",
+        "title": "Model",
         "data": {
+          "model_type": "Model runtime",
           "ml_db_path": "ML DB path (optional)",
-          "ml_artifact_view": "ML artifact view"
+          "ml_artifact_view": "ML artifact view",
+          "ml_feature_source": "Runtime feature source",
+          "ml_feature_view": "Feature snapshot view"
+        }
+      },
+      "feature_source": {
+        "title": "Feature Source",
+        "data": {
+          "ml_feature_source": "Runtime feature source",
+          "ml_feature_view": "Feature snapshot view"
+        }
+      },
+      "decision": {
+        "title": "Decision",
+        "data": {
+          "threshold": "Decision threshold (%)",
+          "calibration_slope": "Calibration slope",
+          "calibration_intercept": "Calibration intercept"
         }
       },
       "diagnostics": {

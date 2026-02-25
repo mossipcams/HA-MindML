@@ -9,9 +9,9 @@ config_entries = types.ModuleType("homeassistant.config_entries")
 core = types.ModuleType("homeassistant.core")
 config_entries.ConfigEntry = object
 core.HomeAssistant = object
-sys.modules["homeassistant"] = homeassistant
-sys.modules["homeassistant.config_entries"] = config_entries
-sys.modules["homeassistant.core"] = core
+sys.modules.setdefault("homeassistant", homeassistant)
+sys.modules.setdefault("homeassistant.config_entries", config_entries)
+sys.modules.setdefault("homeassistant.core", core)
 
 from custom_components.calibrated_logistic_regression.inference import (
     CalibrationSpec,

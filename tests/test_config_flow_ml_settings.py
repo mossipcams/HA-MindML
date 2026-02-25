@@ -98,13 +98,13 @@ selector.EntitySelectorConfig = EntitySelectorConfig
 selector.EntitySelector = EntitySelector
 helpers.selector = selector
 
-sys.modules["homeassistant"] = homeassistant
-sys.modules["voluptuous"] = vol
-sys.modules["homeassistant.config_entries"] = config_entries
-sys.modules["homeassistant.core"] = core
-sys.modules["homeassistant.data_entry_flow"] = data_entry_flow
-sys.modules["homeassistant.helpers"] = helpers
-sys.modules["homeassistant.helpers.selector"] = selector
+sys.modules.setdefault("homeassistant", homeassistant)
+sys.modules.setdefault("voluptuous", vol)
+sys.modules.setdefault("homeassistant.config_entries", config_entries)
+sys.modules.setdefault("homeassistant.core", core)
+sys.modules.setdefault("homeassistant.data_entry_flow", data_entry_flow)
+sys.modules.setdefault("homeassistant.helpers", helpers)
+sys.modules.setdefault("homeassistant.helpers.selector", selector)
 
 from custom_components.calibrated_logistic_regression.config_flow import _build_user_schema
 

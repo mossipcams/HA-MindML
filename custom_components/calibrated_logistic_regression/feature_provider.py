@@ -6,7 +6,7 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 import re
-from typing import Any
+from typing import Any, Callable
 
 from .feature_mapping import FEATURE_TYPE_CATEGORICAL, infer_state_mappings_from_states
 from .model import parse_float
@@ -139,4 +139,39 @@ class SqliteSnapshotFeatureProvider:
             feature_values=feature_values,
             missing_features=missing,
             mapped_state_values={},
+        )
+
+
+class RealtimeHistoryFeatureProvider:
+    """Combine instant HA states with runtime history-derived feature values."""
+
+    def __init__(
+        self,
+        *,
+        hass: Any,
+        required_features: list[str],
+        feature_types: dict[str, str],
+        state_mappings: dict[str, dict[str, float]],
+        history_feature_loader: Callable[[list[str]], dict[str, float]],
+    ) -> None:
+        self._state_provider = HassStateFeatureProvider(
+            hass=hass,
+            required_features=required_features,
+            feature_types=feature_types,
+            state_mappings=state_mappings,
+        )
+        self._required_features = list(required_features)
+        self._history_feature_loader = history_feature_loader
+
+    def load(self) -> FeatureVectorResult:
+        base = self._state_provider.load()
+        history_values = self._history_feature_loader(self._required_features)
+        merged_values = dict(base.feature_values)
+        merged_values.update({key: float(value) for key, value in history_values.items()})
+
+        missing = [feature for feature in self._required_features if feature not in merged_values]
+        return FeatureVectorResult(
+            feature_values=merged_values,
+            missing_features=missing,
+            mapped_state_values=dict(base.mapped_state_values),
         )

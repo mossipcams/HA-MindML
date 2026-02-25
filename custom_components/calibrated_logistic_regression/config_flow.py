@@ -22,6 +22,7 @@ from .const import (
     CONF_ML_DB_PATH,
     CONF_ML_FEATURE_SOURCE,
     CONF_ML_FEATURE_VIEW,
+    CONF_MODEL_TYPE,
     CONF_NAME,
     CONF_REQUIRED_FEATURES,
     CONF_STATE_MAPPINGS,
@@ -32,6 +33,7 @@ from .const import (
     DEFAULT_ML_ARTIFACT_VIEW,
     DEFAULT_ML_FEATURE_SOURCE,
     DEFAULT_ML_FEATURE_VIEW,
+    DEFAULT_MODEL_TYPE,
     DEFAULT_THRESHOLD,
     DOMAIN,
 )
@@ -60,6 +62,21 @@ def _build_user_schema() -> vol.Schema:
                         selector.SelectOptionDict(
                             value="success_probability",
                             label="Success Probability",
+                        ),
+                    ],
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            ),
+            vol.Required(CONF_MODEL_TYPE, default=DEFAULT_MODEL_TYPE): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[
+                        selector.SelectOptionDict(
+                            value="lightgbm",
+                            label="LightGBM (recommended)",
+                        ),
+                        selector.SelectOptionDict(
+                            value="clr",
+                            label="Calibrated Logistic Regression",
                         ),
                     ],
                     mode=selector.SelectSelectorMode.DROPDOWN,
@@ -154,6 +171,9 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
                         return self.async_abort(reason="already_configured")
                 self._draft[CONF_NAME] = name
                 self._draft[CONF_GOAL] = goal
+                self._draft[CONF_MODEL_TYPE] = str(
+                    user_input.get(CONF_MODEL_TYPE, DEFAULT_MODEL_TYPE)
+                ).strip() or DEFAULT_MODEL_TYPE
                 ml_db_path = str(user_input.get(CONF_ML_DB_PATH, "")).strip()
                 ml_artifact_view = str(
                     user_input.get(CONF_ML_ARTIFACT_VIEW, DEFAULT_ML_ARTIFACT_VIEW)
@@ -279,6 +299,7 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
                 data={
                     CONF_NAME: self._draft[CONF_NAME],
                     CONF_GOAL: self._draft[CONF_GOAL],
+                    CONF_MODEL_TYPE: self._draft[CONF_MODEL_TYPE],
                     CONF_REQUIRED_FEATURES: self._draft[CONF_REQUIRED_FEATURES],
                     CONF_FEATURE_TYPES: self._draft[CONF_FEATURE_TYPES],
                     CONF_FEATURE_STATES: self._draft[CONF_FEATURE_STATES],
@@ -329,7 +350,14 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
         """Show management sections."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["features", "mappings", "threshold", "calibration", "model", "diagnostics"],
+            menu_options=[
+                "model",
+                "feature_source",
+                "decision",
+                "features",
+                "mappings",
+                "diagnostics",
+            ],
         )
 
     async def async_step_model(
@@ -341,6 +369,10 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
             return self.async_create_entry(
                 title="",
                 data={
+                    CONF_MODEL_TYPE: str(
+                        user_input.get(CONF_MODEL_TYPE, DEFAULT_MODEL_TYPE)
+                    ).strip()
+                    or DEFAULT_MODEL_TYPE,
                     CONF_ML_DB_PATH: str(user_input.get(CONF_ML_DB_PATH, "")).strip(),
                     CONF_ML_ARTIFACT_VIEW: str(
                         user_input.get(CONF_ML_ARTIFACT_VIEW, DEFAULT_ML_ARTIFACT_VIEW)
@@ -361,6 +393,10 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
             CONF_ML_DB_PATH,
             self._config_entry.data.get(CONF_ML_DB_PATH, ""),
         )
+        default_model_type = self._config_entry.options.get(
+            CONF_MODEL_TYPE,
+            self._config_entry.data.get(CONF_MODEL_TYPE, DEFAULT_MODEL_TYPE),
+        )
         default_view = self._config_entry.options.get(
             CONF_ML_ARTIFACT_VIEW,
             self._config_entry.data.get(CONF_ML_ARTIFACT_VIEW, DEFAULT_ML_ARTIFACT_VIEW),
@@ -377,6 +413,23 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
             step_id="model",
             data_schema=vol.Schema(
                 {
+                    vol.Required(
+                        CONF_MODEL_TYPE, default=default_model_type
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                selector.SelectOptionDict(
+                                    value="lightgbm",
+                                    label="LightGBM (recommended)",
+                                ),
+                                selector.SelectOptionDict(
+                                    value="clr",
+                                    label="Calibrated Logistic Regression",
+                                ),
+                            ],
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
                     vol.Optional(CONF_ML_DB_PATH, default=default_db_path): str,
                     vol.Required(CONF_ML_ARTIFACT_VIEW, default=default_view): str,
                     vol.Required(
@@ -397,6 +450,103 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
                         )
                     ),
                     vol.Required(CONF_ML_FEATURE_VIEW, default=default_feature_view): str,
+                }
+            ),
+        )
+
+    async def async_step_feature_source(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Manage runtime feature source settings."""
+        if user_input is not None:
+            return self.async_create_entry(
+                title="",
+                data={
+                    CONF_ML_FEATURE_SOURCE: str(
+                        user_input.get(CONF_ML_FEATURE_SOURCE, DEFAULT_ML_FEATURE_SOURCE)
+                    ).strip()
+                    or DEFAULT_ML_FEATURE_SOURCE,
+                    CONF_ML_FEATURE_VIEW: str(
+                        user_input.get(CONF_ML_FEATURE_VIEW, DEFAULT_ML_FEATURE_VIEW)
+                    ).strip()
+                    or DEFAULT_ML_FEATURE_VIEW,
+                },
+            )
+
+        default_feature_source = self._config_entry.options.get(
+            CONF_ML_FEATURE_SOURCE,
+            self._config_entry.data.get(CONF_ML_FEATURE_SOURCE, DEFAULT_ML_FEATURE_SOURCE),
+        )
+        default_feature_view = self._config_entry.options.get(
+            CONF_ML_FEATURE_VIEW,
+            self._config_entry.data.get(CONF_ML_FEATURE_VIEW, DEFAULT_ML_FEATURE_VIEW),
+        )
+        return self.async_show_form(
+            step_id="feature_source",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_ML_FEATURE_SOURCE, default=default_feature_source
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                selector.SelectOptionDict(
+                                    value="hass_state",
+                                    label="Home Assistant States",
+                                ),
+                                selector.SelectOptionDict(
+                                    value="ml_snapshot",
+                                    label="ML Snapshot View",
+                                ),
+                            ],
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                    vol.Required(CONF_ML_FEATURE_VIEW, default=default_feature_view): str,
+                }
+            ),
+        )
+
+    async def async_step_decision(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Manage probability-to-decision settings."""
+        if user_input is not None:
+            return self.async_create_entry(
+                title="",
+                data={
+                    CONF_THRESHOLD: float(user_input[CONF_THRESHOLD]),
+                    CONF_CALIBRATION_SLOPE: float(user_input[CONF_CALIBRATION_SLOPE]),
+                    CONF_CALIBRATION_INTERCEPT: float(user_input[CONF_CALIBRATION_INTERCEPT]),
+                },
+            )
+
+        default_threshold = self._config_entry.options.get(
+            CONF_THRESHOLD,
+            self._config_entry.data.get(CONF_THRESHOLD, DEFAULT_THRESHOLD),
+        )
+        defaults_slope = self._config_entry.options.get(
+            CONF_CALIBRATION_SLOPE,
+            self._config_entry.data.get(CONF_CALIBRATION_SLOPE, DEFAULT_CALIBRATION_SLOPE),
+        )
+        defaults_intercept = self._config_entry.options.get(
+            CONF_CALIBRATION_INTERCEPT,
+            self._config_entry.data.get(
+                CONF_CALIBRATION_INTERCEPT,
+                DEFAULT_CALIBRATION_INTERCEPT,
+            ),
+        )
+        return self.async_show_form(
+            step_id="decision",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_THRESHOLD, default=default_threshold): vol.Coerce(float),
+                    vol.Required(CONF_CALIBRATION_SLOPE, default=defaults_slope): vol.Coerce(float),
+                    vol.Required(
+                        CONF_CALIBRATION_INTERCEPT, default=defaults_intercept
+                    ): vol.Coerce(float),
                 }
             ),
         )

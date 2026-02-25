@@ -39,13 +39,13 @@ core.callback = lambda fn: fn
 entity_platform.AddEntitiesCallback = object
 event_helpers.async_track_state_change_event = lambda hass, entities, cb: lambda: None
 
-sys.modules["homeassistant"] = homeassistant
-sys.modules["homeassistant.components"] = components
-sys.modules["homeassistant.components.sensor"] = sensor_component
-sys.modules["homeassistant.config_entries"] = config_entries
-sys.modules["homeassistant.core"] = core
-sys.modules["homeassistant.helpers.entity_platform"] = entity_platform
-sys.modules["homeassistant.helpers.event"] = event_helpers
+sys.modules.setdefault("homeassistant", homeassistant)
+sys.modules.setdefault("homeassistant.components", components)
+sys.modules.setdefault("homeassistant.components.sensor", sensor_component)
+sys.modules.setdefault("homeassistant.config_entries", config_entries)
+sys.modules.setdefault("homeassistant.core", core)
+sys.modules.setdefault("homeassistant.helpers.entity_platform", entity_platform)
+sys.modules.setdefault("homeassistant.helpers.event", event_helpers)
 
 from custom_components.calibrated_logistic_regression.sensor import (
     CalibratedLogisticRegressionSensor,
@@ -102,6 +102,7 @@ def test_sensor_can_use_ml_snapshot_feature_source(monkeypatch) -> None:
     entry.title = "ML CLR"
     entry.data = {
         "name": "ML CLR",
+        "model_type": "clr",
         "intercept": 0.0,
         "coefficients": {"event_count": 0.0},
         "required_features": ["event_count"],
@@ -124,3 +125,37 @@ def test_sensor_can_use_ml_snapshot_feature_source(monkeypatch) -> None:
     assert attrs["feature_source"] == "ml_snapshot"
     assert attrs["missing_features"] == []
     assert attrs["feature_values"] == {"event_count": 3.0}
+
+
+def test_sensor_can_run_lightgbm_strategy(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "custom_components.calibrated_logistic_regression.sensor.SqliteLightGBMModelProvider",
+        _ModelProvider,
+    )
+    monkeypatch.setattr(
+        "custom_components.calibrated_logistic_regression.sensor.SqliteSnapshotFeatureProvider",
+        _FeatureProvider,
+    )
+
+    hass = MagicMock()
+    entry = MagicMock()
+    entry.entry_id = "entry-lgbm"
+    entry.title = "LGBM CLR"
+    entry.data = {
+        "name": "LGBM CLR",
+        "model_type": "lightgbm",
+        "required_features": ["event_count"],
+        "threshold": 50.0,
+        "ml_db_path": "/tmp/ha_ml_data_layer.db",
+        "ml_artifact_view": "vw_clr_latest_model_artifact",
+        "ml_feature_source": "ml_snapshot",
+        "ml_feature_view": "vw_latest_feature_snapshot",
+    }
+    entry.options = {}
+
+    sensor = CalibratedLogisticRegressionSensor(hass, entry)
+    sensor._recompute_state(datetime.now())
+    attrs = sensor.extra_state_attributes
+
+    assert sensor.available is True
+    assert attrs["model_runtime"] == "lightgbm"
