@@ -18,7 +18,7 @@ def test_user_schema_contains_name_and_goal() -> None:
 
 
 def test_features_schema_contains_required_features() -> None:
-    schema = _build_features_schema("sensor.a")
+    schema = _build_features_schema(["sensor.a"])
     keys = [str(k.schema) for k in schema.schema]
     assert "required_features" in keys
 

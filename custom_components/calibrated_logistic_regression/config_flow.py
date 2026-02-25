@@ -8,6 +8,7 @@ from typing import Any
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers import selector
 
 from .const import (
     CONF_CALIBRATION_INTERCEPT,
@@ -38,15 +39,32 @@ def _build_user_schema() -> vol.Schema:
     return vol.Schema(
         {
             vol.Required(CONF_NAME): str,
-            vol.Required(CONF_GOAL, default=DEFAULT_GOAL): str,
+            vol.Required(CONF_GOAL, default=DEFAULT_GOAL): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[
+                        selector.SelectOptionDict(value="risk", label="Risk"),
+                        selector.SelectOptionDict(
+                            value="event_probability",
+                            label="Event Probability",
+                        ),
+                        selector.SelectOptionDict(
+                            value="success_probability",
+                            label="Success Probability",
+                        ),
+                    ],
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            ),
         }
     )
 
 
-def _build_features_schema(default_features: str) -> vol.Schema:
+def _build_features_schema(default_features: list[str]) -> vol.Schema:
     return vol.Schema(
         {
-            vol.Required(CONF_REQUIRED_FEATURES, default=default_features): str,
+            vol.Required(CONF_REQUIRED_FEATURES, default=default_features): selector.EntitySelector(
+                selector.EntitySelectorConfig(multiple=True)
+            ),
         }
     )
 
@@ -123,6 +141,9 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
             step_id="user",
             data_schema=_build_user_schema(),
             errors=errors,
+            description_placeholders={
+                "goal_options": "risk, event_probability, success_probability",
+            },
         )
 
     async def async_step_features(
@@ -132,7 +153,7 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
         """Collect feature entity IDs."""
         errors: dict[str, str] = {}
         if user_input is not None:
-            required_features = parse_required_features(str(user_input[CONF_REQUIRED_FEATURES]))
+            required_features = parse_required_features(user_input[CONF_REQUIRED_FEATURES])
             if not required_features:
                 errors[CONF_REQUIRED_FEATURES] = "required"
             if not errors:
@@ -143,11 +164,14 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
                 self._draft["_feature_types_default"] = default_types
                 return await self.async_step_feature_types()
 
-        default_features = ", ".join(self._draft.get(CONF_REQUIRED_FEATURES, []))
+        default_features = list(self._draft.get(CONF_REQUIRED_FEATURES, []))
         return self.async_show_form(
             step_id="features",
             data_schema=_build_features_schema(default_features),
             errors=errors,
+            description_placeholders={
+                "features_help": "Pick entities like sensor.temperature or binary_sensor.door.",
+            },
         )
 
     async def async_step_feature_types(
@@ -187,6 +211,9 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
             step_id="feature_types",
             data_schema=_build_feature_types_schema(default_types),
             errors=errors,
+            description_placeholders={
+                "type_options": "numeric or categorical",
+            },
         )
 
     async def async_step_mappings(
@@ -218,6 +245,9 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
             step_id="mappings",
             data_schema=_build_mappings_schema(default_mappings),
             errors=errors,
+            description_placeholders={
+                "mapping_example": '{"binary_sensor.window": {"on": 1, "off": 0}}',
+            },
         )
 
     async def async_step_model(
@@ -254,6 +284,9 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
             step_id="model",
             data_schema=_build_model_schema(default_coefficients),
             errors=errors,
+            description_placeholders={
+                "coefficients_example": '{"sensor.temp": 0.8, "binary_sensor.window": 1.2}',
+            },
         )
 
     async def async_step_preview(
@@ -315,7 +348,7 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
         """Manage selected required features."""
         errors: dict[str, str] = {}
         if user_input is not None:
-            required_features = parse_required_features(str(user_input[CONF_REQUIRED_FEATURES]))
+            required_features = parse_required_features(user_input[CONF_REQUIRED_FEATURES])
             if not required_features:
                 errors[CONF_REQUIRED_FEATURES] = "required"
             else:
@@ -330,8 +363,11 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
         )
         return self.async_show_form(
             step_id="features",
-            data_schema=_build_features_schema(", ".join(defaults)),
+            data_schema=_build_features_schema(defaults),
             errors=errors,
+            description_placeholders={
+                "features_help": "Pick entities to include as model features.",
+            },
         )
 
     async def async_step_mappings(

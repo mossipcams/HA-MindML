@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Calibrated Logistic Regression",
-        "description": "Name the sensor and define what probability means in your automation context.",
+        "description": "Name the sensor and choose probability goal. Available goals: {goal_options}.",
         "data": {
           "name": "Name",
           "goal": "Probability goal"
@@ -11,28 +11,28 @@
       },
       "features": {
         "title": "Select Features",
-        "description": "Choose the entity IDs used as model features.",
+        "description": "Choose entities used as model features. {features_help}",
         "data": {
           "required_features": "Required features"
         }
       },
       "feature_types": {
         "title": "Feature Types",
-        "description": "Mark each feature as numeric or categorical.",
+        "description": "Mark each feature type. Valid values: {type_options}.",
         "data": {
           "feature_types": "Feature types JSON"
         }
       },
       "mappings": {
         "title": "Categorical Mappings",
-        "description": "Map non-numeric states to numbers for categorical features.",
+        "description": "Map non-numeric states to numbers for categorical features. Example: {mapping_example}",
         "data": {
           "state_mappings": "State mappings JSON"
         }
       },
       "model": {
         "title": "Model Parameters",
-        "description": "Provide model coefficients and calibration values.",
+        "description": "Provide model coefficients and calibration values. Example coefficients JSON: {coefficients_example}",
         "data": {
           "intercept": "Intercept",
           "coefficients": "Coefficients JSON",

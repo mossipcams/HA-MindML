@@ -12,9 +12,21 @@ _VALID_FEATURE_TYPES: Final[frozenset[str]] = frozenset(
 )
 
 
-def parse_required_features(raw: str) -> list[str]:
-    """Parse comma-separated list of required feature entity IDs."""
-    return [item.strip() for item in raw.split(",") if item.strip()]
+def parse_required_features(raw: object) -> list[str]:
+    """Parse required feature entity IDs from selector list or comma-separated string."""
+    if isinstance(raw, list):
+        parsed: list[str] = []
+        for item in raw:
+            if isinstance(item, str):
+                cleaned = item.strip()
+                if cleaned:
+                    parsed.append(cleaned)
+        return parsed
+
+    if isinstance(raw, str):
+        return [item.strip() for item in raw.split(",") if item.strip()]
+
+    return []
 
 
 def parse_coefficients(raw: str) -> dict[str, float] | None:

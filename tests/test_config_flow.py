@@ -24,7 +24,9 @@ def test_wizard_happy_path_creates_entry() -> None:
     assert user_result["step_id"] == "features"
 
     features_result = asyncio.run(
-        flow.async_step_features({"required_features": "sensor.a, binary_sensor.window"})
+        flow.async_step_features(
+            {"required_features": ["sensor.a", "binary_sensor.window"]}
+        )
     )
     assert features_result["type"] == "form"
     assert features_result["step_id"] == "feature_types"
@@ -81,7 +83,7 @@ def test_user_step_aborts_duplicate_name() -> None:
 def test_feature_types_step_rejects_invalid_type() -> None:
     flow = _new_flow()
     asyncio.run(flow.async_step_user({"name": "Kitchen CLR", "goal": "risk"}))
-    asyncio.run(flow.async_step_features({"required_features": "sensor.a"}))
+    asyncio.run(flow.async_step_features({"required_features": ["sensor.a"]}))
 
     result = asyncio.run(flow.async_step_feature_types({"feature_types": '{"sensor.a": "bad"}'}))
 
@@ -92,7 +94,7 @@ def test_feature_types_step_rejects_invalid_type() -> None:
 def test_mappings_step_requires_categorical_mappings() -> None:
     flow = _new_flow()
     asyncio.run(flow.async_step_user({"name": "Kitchen CLR", "goal": "risk"}))
-    asyncio.run(flow.async_step_features({"required_features": "binary_sensor.window"}))
+    asyncio.run(flow.async_step_features({"required_features": ["binary_sensor.window"]}))
     asyncio.run(
         flow.async_step_feature_types(
             {"feature_types": '{"binary_sensor.window": "categorical"}'}
@@ -108,7 +110,7 @@ def test_mappings_step_requires_categorical_mappings() -> None:
 def test_model_step_rejects_coefficient_mismatch() -> None:
     flow = _new_flow()
     asyncio.run(flow.async_step_user({"name": "Kitchen CLR", "goal": "risk"}))
-    asyncio.run(flow.async_step_features({"required_features": "sensor.a,sensor.b"}))
+    asyncio.run(flow.async_step_features({"required_features": ["sensor.a", "sensor.b"]}))
     asyncio.run(
         flow.async_step_feature_types(
             {"feature_types": '{"sensor.a": "numeric", "sensor.b": "numeric"}'}

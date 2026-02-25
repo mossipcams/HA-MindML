@@ -12,7 +12,7 @@ Custom integration that exposes a calibrated logistic regression output as a Hom
 ## Setup Wizard Steps
 
 1. **Name & Goal**: define sensor name and what probability represents.
-2. **Features**: list entity IDs used as features.
+2. **Features**: pick feature entities with the Home Assistant entity selector.
 3. **Feature Types**: set each feature to `numeric` or `categorical`.
 4. **Mappings**: map categorical states to numbers.
 5. **Model**: provide intercept, coefficients, and calibration values.
@@ -58,6 +58,12 @@ Open the integration options and choose:
 - `missing_features`
 - `unavailable_reason`
 - `last_computed_at`
+
+## Setup Guidance
+
+- Goal options are selectable in the wizard: `risk`, `event_probability`, `success_probability`.
+- Feature selection uses a native entity picker to avoid typing mistakes.
+- Mapping and coefficient steps include inline JSON examples in the UI.
 
 ## Sensor Behavior
 
