@@ -110,3 +110,32 @@ def test_sensor_uses_state_mapping_for_non_numeric_state() -> None:
     assert sensor.available is True
     assert sensor.extra_state_attributes["feature_values"]["binary_sensor.window"] == 1.0
     assert sensor.extra_state_attributes["mapped_state_values"]["binary_sensor.window"] == "on"
+
+
+def test_sensor_auto_maps_known_categorical_state_when_mapping_missing() -> None:
+    hass = MagicMock()
+    hass.states.get.side_effect = lambda entity_id: {
+        "binary_sensor.window": State("binary_sensor.window", "off"),
+    }.get(entity_id)
+
+    entry = MagicMock()
+    entry.entry_id = "entry-auto-map"
+    entry.title = "Window Risk"
+    entry.data = {
+        "name": "Window Risk",
+        "goal": "risk",
+        "intercept": 0.0,
+        "coefficients": {"binary_sensor.window": 1.0},
+        "feature_types": {"binary_sensor.window": "categorical"},
+        "calibration_slope": 1.0,
+        "calibration_intercept": 0.0,
+        "required_features": ["binary_sensor.window"],
+        "state_mappings": {},
+    }
+    entry.options = {}
+
+    sensor = CalibratedLogisticRegressionSensor(hass, entry)
+    sensor._recompute_state(datetime.now())
+
+    assert sensor.available is True
+    assert sensor.extra_state_attributes["feature_values"]["binary_sensor.window"] == 0.0

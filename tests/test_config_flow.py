@@ -13,6 +13,11 @@ def _new_flow() -> CalibratedLogisticRegressionConfigFlow:
     flow = CalibratedLogisticRegressionConfigFlow()
     flow.hass = MagicMock()
     flow._async_current_entries = MagicMock(return_value=[])
+    flow.hass.states.get.side_effect = lambda entity_id: {
+        "sensor.a": MagicMock(state="22.5"),
+        "binary_sensor.window": MagicMock(state="on"),
+        "sensor.b": MagicMock(state="5"),
+    }.get(entity_id)
     return flow
 
 
@@ -29,23 +34,7 @@ def test_wizard_happy_path_creates_entry() -> None:
         )
     )
     assert features_result["type"] == "form"
-    assert features_result["step_id"] == "feature_types"
-
-    feature_types_result = asyncio.run(
-        flow.async_step_feature_types(
-            {"feature_types": '{"sensor.a": "numeric", "binary_sensor.window": "categorical"}'}
-        )
-    )
-    assert feature_types_result["type"] == "form"
-    assert feature_types_result["step_id"] == "mappings"
-
-    mappings_result = asyncio.run(
-        flow.async_step_mappings(
-            {"state_mappings": '{"binary_sensor.window": {"on": 1, "off": 0}}'}
-        )
-    )
-    assert mappings_result["type"] == "form"
-    assert mappings_result["step_id"] == "model"
+    assert features_result["step_id"] == "model"
 
     model_result = asyncio.run(
         flow.async_step_model(
@@ -65,6 +54,10 @@ def test_wizard_happy_path_creates_entry() -> None:
     assert preview_result["title"] == "Kitchen CLR"
     assert preview_result["data"]["goal"] == "risk"
     assert preview_result["data"]["feature_types"]["binary_sensor.window"] == "categorical"
+    assert preview_result["data"]["state_mappings"]["binary_sensor.window"] == {
+        "on": 1.0,
+        "off": 0.0,
+    }
 
 
 def test_user_step_aborts_duplicate_name() -> None:
@@ -80,43 +73,43 @@ def test_user_step_aborts_duplicate_name() -> None:
     assert result["reason"] == "already_configured"
 
 
-def test_feature_types_step_rejects_invalid_type() -> None:
+def test_features_step_infers_types_automatically() -> None:
     flow = _new_flow()
     asyncio.run(flow.async_step_user({"name": "Kitchen CLR", "goal": "risk"}))
-    asyncio.run(flow.async_step_features({"required_features": ["sensor.a"]}))
 
-    result = asyncio.run(flow.async_step_feature_types({"feature_types": '{"sensor.a": "bad"}'}))
-
+    result = asyncio.run(flow.async_step_features({"required_features": ["sensor.a"]}))
     assert result["type"] == "form"
-    assert result["errors"]["feature_types"] == "invalid_feature_types"
+    assert result["step_id"] == "model"
+    assert flow._draft["feature_types"]["sensor.a"] == "numeric"
 
 
-def test_mappings_step_requires_categorical_mappings() -> None:
+def test_mappings_step_requires_manual_mapping_for_unknown_categorical() -> None:
     flow = _new_flow()
+    flow.hass.states.get.side_effect = lambda entity_id: {
+        "sensor.status_text": MagicMock(state="mystery"),
+    }.get(entity_id)
     asyncio.run(flow.async_step_user({"name": "Kitchen CLR", "goal": "risk"}))
-    asyncio.run(flow.async_step_features({"required_features": ["binary_sensor.window"]}))
-    asyncio.run(
-        flow.async_step_feature_types(
-            {"feature_types": '{"binary_sensor.window": "categorical"}'}
-        )
+    features_result = asyncio.run(
+        flow.async_step_features({"required_features": ["sensor.status_text"]})
     )
+    assert features_result["step_id"] == "mappings"
 
     result = asyncio.run(flow.async_step_mappings({"state_mappings": "{}"}))
 
     assert result["type"] == "form"
     assert result["errors"]["state_mappings"] == "missing_categorical_mappings"
 
+    model_result = asyncio.run(
+        flow.async_step_mappings({"state_mappings": '{"sensor.status_text": {"mystery": 0.5}}'})
+    )
+    assert model_result["type"] == "form"
+    assert model_result["step_id"] == "model"
+
 
 def test_model_step_rejects_coefficient_mismatch() -> None:
     flow = _new_flow()
     asyncio.run(flow.async_step_user({"name": "Kitchen CLR", "goal": "risk"}))
     asyncio.run(flow.async_step_features({"required_features": ["sensor.a", "sensor.b"]}))
-    asyncio.run(
-        flow.async_step_feature_types(
-            {"feature_types": '{"sensor.a": "numeric", "sensor.b": "numeric"}'}
-        )
-    )
-    asyncio.run(flow.async_step_mappings({"state_mappings": "{}"}))
 
     result = asyncio.run(
         flow.async_step_model(

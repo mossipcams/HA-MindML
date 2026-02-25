@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from custom_components.calibrated_logistic_regression.config_flow import (
-    _build_feature_types_schema,
     _build_features_schema,
     _build_mappings_schema,
     _build_model_schema,
@@ -21,12 +20,6 @@ def test_features_schema_contains_required_features() -> None:
     schema = _build_features_schema(["sensor.a"])
     keys = [str(k.schema) for k in schema.schema]
     assert "required_features" in keys
-
-
-def test_feature_types_schema_contains_feature_types() -> None:
-    schema = _build_feature_types_schema('{"sensor.a": "numeric"}')
-    keys = [str(k.schema) for k in schema.schema]
-    assert "feature_types" in keys
 
 
 def test_mappings_schema_contains_state_mappings() -> None:

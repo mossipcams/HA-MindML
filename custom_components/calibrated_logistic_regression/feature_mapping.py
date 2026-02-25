@@ -5,11 +5,23 @@ from __future__ import annotations
 import json
 from typing import Final
 
+from .model import parse_float
+
 FEATURE_TYPE_NUMERIC: Final = "numeric"
 FEATURE_TYPE_CATEGORICAL: Final = "categorical"
 _VALID_FEATURE_TYPES: Final[frozenset[str]] = frozenset(
     {FEATURE_TYPE_NUMERIC, FEATURE_TYPE_CATEGORICAL}
 )
+_KNOWN_STATE_MAPPINGS: Final[dict[str, dict[str, float]]] = {
+    "on": {"on": 1.0, "off": 0.0},
+    "off": {"on": 1.0, "off": 0.0},
+    "true": {"true": 1.0, "false": 0.0},
+    "false": {"true": 1.0, "false": 0.0},
+    "home": {"home": 1.0, "away": 0.0},
+    "away": {"home": 1.0, "away": 0.0},
+    "open": {"open": 1.0, "closed": 0.0},
+    "closed": {"open": 1.0, "closed": 0.0},
+}
 
 
 def parse_required_features(raw: object) -> list[str]:
@@ -125,3 +137,28 @@ def validate_categorical_mappings(
     ]
     missing.sort()
     return missing
+
+
+def infer_feature_types_from_states(
+    entity_states: dict[str, str],
+) -> dict[str, str]:
+    """Infer feature type from current observed states."""
+    inferred: dict[str, str] = {}
+    for entity_id, state in entity_states.items():
+        if parse_float(state) is not None:
+            inferred[entity_id] = FEATURE_TYPE_NUMERIC
+        else:
+            inferred[entity_id] = FEATURE_TYPE_CATEGORICAL
+    return inferred
+
+
+def infer_state_mappings_from_states(
+    entity_states: dict[str, str],
+) -> dict[str, dict[str, float]]:
+    """Infer default mapping tables for categorical states."""
+    mappings: dict[str, dict[str, float]] = {}
+    for entity_id, raw_state in entity_states.items():
+        normalized = raw_state.casefold()
+        if normalized in _KNOWN_STATE_MAPPINGS:
+            mappings[entity_id] = dict(_KNOWN_STATE_MAPPINGS[normalized])
+    return mappings

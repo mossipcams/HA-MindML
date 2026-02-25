@@ -27,8 +27,10 @@ from .const import (
 )
 from .feature_mapping import (
     FEATURE_TYPE_CATEGORICAL,
+    FEATURE_TYPE_NUMERIC,
+    infer_feature_types_from_states,
+    infer_state_mappings_from_states,
     parse_coefficients,
-    parse_feature_types,
     parse_required_features,
     parse_state_mappings,
     validate_categorical_mappings,
@@ -65,14 +67,6 @@ def _build_features_schema(default_features: list[str]) -> vol.Schema:
             vol.Required(CONF_REQUIRED_FEATURES, default=default_features): selector.EntitySelector(
                 selector.EntitySelectorConfig(multiple=True)
             ),
-        }
-    )
-
-
-def _build_feature_types_schema(default_types: str) -> vol.Schema:
-    return vol.Schema(
-        {
-            vol.Required(CONF_FEATURE_TYPES, default=default_types): str,
         }
     )
 
@@ -158,11 +152,37 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
                 errors[CONF_REQUIRED_FEATURES] = "required"
             if not errors:
                 self._draft[CONF_REQUIRED_FEATURES] = required_features
-                default_types = json.dumps(
-                    {feature: "numeric" for feature in required_features}
+                observed_states: dict[str, str] = {}
+                for feature in required_features:
+                    state_obj = self.hass.states.get(feature)
+                    observed_states[feature] = (
+                        str(state_obj.state)
+                        if state_obj is not None and hasattr(state_obj, "state")
+                        else ""
+                    )
+                feature_types = infer_feature_types_from_states(observed_states)
+                self._draft[CONF_FEATURE_TYPES] = {
+                    feature: feature_types.get(feature, FEATURE_TYPE_NUMERIC)
+                    for feature in required_features
+                }
+
+                inferred_state_mappings = infer_state_mappings_from_states(observed_states)
+                self._draft[CONF_STATE_MAPPINGS] = {
+                    feature: inferred_state_mappings[feature]
+                    for feature in required_features
+                    if feature in inferred_state_mappings
+                    and self._draft[CONF_FEATURE_TYPES].get(feature)
+                    == FEATURE_TYPE_CATEGORICAL
+                }
+
+                missing = validate_categorical_mappings(
+                    feature_types=self._draft[CONF_FEATURE_TYPES],
+                    state_mappings=self._draft[CONF_STATE_MAPPINGS],
                 )
-                self._draft["_feature_types_default"] = default_types
-                return await self.async_step_feature_types()
+                if missing:
+                    return await self.async_step_mappings()
+
+                return await self.async_step_model()
 
         default_features = list(self._draft.get(CONF_REQUIRED_FEATURES, []))
         return self.async_show_form(
@@ -171,48 +191,6 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
             errors=errors,
             description_placeholders={
                 "features_help": "Pick entities like sensor.temperature or binary_sensor.door.",
-            },
-        )
-
-    async def async_step_feature_types(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> FlowResult:
-        """Collect feature type assignments."""
-        errors: dict[str, str] = {}
-        required_features = list(self._draft.get(CONF_REQUIRED_FEATURES, []))
-
-        if user_input is not None:
-            feature_types = parse_feature_types(
-                str(user_input[CONF_FEATURE_TYPES]),
-                required_features,
-            )
-            if feature_types is None:
-                errors[CONF_FEATURE_TYPES] = "invalid_feature_types"
-            if not errors:
-                self._draft[CONF_FEATURE_TYPES] = feature_types
-                default_mappings = json.dumps(
-                    {
-                        feature: {"state_a": 0.0, "state_b": 1.0}
-                        for feature, feature_type in feature_types.items()
-                        if feature_type == FEATURE_TYPE_CATEGORICAL
-                    }
-                )
-                self._draft["_state_mappings_default"] = (
-                    default_mappings if default_mappings != "{}" else "{}"
-                )
-                return await self.async_step_mappings()
-
-        default_types = str(
-            self._draft.get("_feature_types_default")
-            or json.dumps({feature: "numeric" for feature in required_features})
-        )
-        return self.async_show_form(
-            step_id="feature_types",
-            data_schema=_build_feature_types_schema(default_types),
-            errors=errors,
-            description_placeholders={
-                "type_options": "numeric or categorical",
             },
         )
 
@@ -225,7 +203,11 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
         feature_types = dict(self._draft.get(CONF_FEATURE_TYPES, {}))
 
         if user_input is not None:
-            state_mappings = parse_state_mappings(str(user_input.get(CONF_STATE_MAPPINGS, "{}")))
+            raw_input = user_input.get(CONF_STATE_MAPPINGS)
+            if raw_input is None or str(raw_input).strip() == "":
+                state_mappings = dict(self._draft.get(CONF_STATE_MAPPINGS, {}))
+            else:
+                state_mappings = parse_state_mappings(str(raw_input))
             if state_mappings is None:
                 errors[CONF_STATE_MAPPINGS] = "invalid_state_mappings"
             else:
@@ -240,7 +222,7 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
                 self._draft[CONF_STATE_MAPPINGS] = state_mappings
                 return await self.async_step_model()
 
-        default_mappings = str(self._draft.get("_state_mappings_default", "{}"))
+        default_mappings = json.dumps(self._draft.get(CONF_STATE_MAPPINGS, {}))
         return self.async_show_form(
             step_id="mappings",
             data_schema=_build_mappings_schema(default_mappings),

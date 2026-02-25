@@ -11,13 +11,11 @@ def test_strings_contains_wizard_and_options_labels() -> None:
     config_steps = strings["config"]["step"]
     assert "user" in config_steps
     assert "features" in config_steps
-    assert "feature_types" in config_steps
     assert "mappings" in config_steps
     assert "model" in config_steps
     assert "preview" in config_steps
 
     errors = strings["config"]["error"]
-    assert "invalid_feature_types" in errors
     assert "missing_categorical_mappings" in errors
     assert "coefficient_mismatch" in errors
 

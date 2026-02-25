@@ -11,21 +11,14 @@
       },
       "features": {
         "title": "Select Features",
-        "description": "Choose entities used as model features. {features_help}",
+        "description": "Choose entities used as model features. {features_help} Feature types and common mappings are inferred automatically.",
         "data": {
           "required_features": "Required features"
         }
       },
-      "feature_types": {
-        "title": "Feature Types",
-        "description": "Mark each feature type. Valid values: {type_options}.",
-        "data": {
-          "feature_types": "Feature types JSON"
-        }
-      },
       "mappings": {
         "title": "Categorical Mappings",
-        "description": "Map non-numeric states to numbers for categorical features. Example: {mapping_example}",
+        "description": "Review or override inferred mappings for categorical features. Example: {mapping_example}",
         "data": {
           "state_mappings": "State mappings JSON"
         }
@@ -50,7 +43,6 @@
     },
     "error": {
       "invalid_coefficients": "Coefficients must be valid JSON object of entity_id to number.",
-      "invalid_feature_types": "Feature types must be a JSON object containing numeric/categorical for each selected feature.",
       "invalid_state_mappings": "State mappings must be JSON object of entity_id to state-to-number mapping.",
       "missing_categorical_mappings": "Every categorical feature needs at least one state mapping.",
       "coefficient_mismatch": "Coefficient keys must exactly match selected features.",

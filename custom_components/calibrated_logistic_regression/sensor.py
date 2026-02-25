@@ -21,7 +21,7 @@ from .const import (
     CONF_REQUIRED_FEATURES,
     CONF_STATE_MAPPINGS,
 )
-from .feature_mapping import FEATURE_TYPE_CATEGORICAL
+from .feature_mapping import FEATURE_TYPE_CATEGORICAL, infer_state_mappings_from_states
 from .model import calibrated_probability, logistic_probability, parse_float
 
 
@@ -153,9 +153,15 @@ class CalibratedLogisticRegressionSensor(SensorEntity):
         normalized_state = raw_state.casefold()
         entity_mapping = self._state_mappings.get(entity_id, {})
         encoded = entity_mapping.get(normalized_state)
-        if encoded is None:
+        if encoded is not None:
+            return encoded, raw_state
+
+        inferred = infer_state_mappings_from_states({entity_id: raw_state})
+        inferred_mapping = inferred.get(entity_id, {})
+        inferred_encoded = inferred_mapping.get(normalized_state)
+        if inferred_encoded is None:
             return None, None
-        return encoded, raw_state
+        return inferred_encoded, raw_state
 
     def _recompute_state(self, now: datetime) -> None:
         """Recompute probability from current source states."""
