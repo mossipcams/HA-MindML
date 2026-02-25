@@ -47,7 +47,15 @@
   "options": {
     "step": {
       "init": {
-        "title": "Manage Integration"
+        "title": "Manage Integration",
+        "menu_options": {
+          "model": "Model",
+          "feature_source": "Feature Source",
+          "decision": "Decision",
+          "features": "Features",
+          "mappings": "Mappings",
+          "diagnostics": "Diagnostics"
+        }
       },
       "features": {
         "title": "Manage Features",
