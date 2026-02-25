@@ -1,0 +1,36 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Calibrated Logistic Regression",
+        "description": "Create a probability sensor from feature entities and model coefficients.",
+        "data": {
+          "name": "Name",
+          "intercept": "Intercept",
+          "coefficients": "Coefficients JSON",
+          "required_features": "Required features",
+          "calibration_slope": "Calibration slope",
+          "calibration_intercept": "Calibration intercept"
+        }
+      }
+    },
+    "error": {
+      "invalid_coefficients": "Coefficients must be valid JSON object of entity_id to number.",
+      "required": "This field is required."
+    },
+    "abort": {
+      "already_configured": "A sensor with this name is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Calibration Options",
+        "data": {
+          "calibration_slope": "Calibration slope",
+          "calibration_intercept": "Calibration intercept"
+        }
+      }
+    }
+  }
+}

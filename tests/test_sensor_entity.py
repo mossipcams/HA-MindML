@@ -1,0 +1,75 @@
+from __future__ import annotations
+
+import asyncio
+from datetime import datetime
+from unittest.mock import MagicMock
+
+from homeassistant.core import State
+
+from custom_components.calibrated_logistic_regression.const import DOMAIN
+from custom_components.calibrated_logistic_regression.sensor import (
+    CalibratedLogisticRegressionSensor,
+    async_setup_entry,
+)
+
+
+def _build_entry() -> MagicMock:
+    entry = MagicMock()
+    entry.entry_id = "entry-1"
+    entry.title = "Kitchen CLR"
+    entry.data = {
+        "name": "Kitchen CLR",
+        "intercept": -0.2,
+        "coefficients": {"sensor.a": 0.4, "sensor.b": -0.1},
+        "calibration_slope": 1.2,
+        "calibration_intercept": -0.05,
+        "required_features": ["sensor.a", "sensor.b"],
+    }
+    entry.options = {}
+    return entry
+
+
+def test_async_setup_entry_adds_one_sensor() -> None:
+    hass = MagicMock()
+    hass.data = {DOMAIN: {}}
+    entry = _build_entry()
+    added = []
+
+    asyncio.run(async_setup_entry(hass, entry, lambda entities: added.extend(entities)))
+
+    assert len(added) == 1
+    assert isinstance(added[0], CalibratedLogisticRegressionSensor)
+
+
+def test_sensor_unavailable_when_required_feature_missing() -> None:
+    hass = MagicMock()
+    hass.states.get.side_effect = lambda entity_id: {
+        "sensor.a": State("sensor.a", "4"),
+    }.get(entity_id)
+
+    sensor = CalibratedLogisticRegressionSensor(hass, _build_entry())
+    sensor._recompute_state(datetime.now())
+
+    assert sensor.available is False
+    attrs = sensor.extra_state_attributes
+    assert attrs["missing_features"] == ["sensor.b"]
+
+
+def test_sensor_updates_probability_and_attributes() -> None:
+    hass = MagicMock()
+    hass.states.get.side_effect = lambda entity_id: {
+        "sensor.a": State("sensor.a", "2"),
+        "sensor.b": State("sensor.b", "1"),
+    }.get(entity_id)
+
+    sensor = CalibratedLogisticRegressionSensor(hass, _build_entry())
+    sensor._recompute_state(datetime.now())
+
+    assert sensor.available is True
+    assert sensor.native_value is not None
+    attrs = sensor.extra_state_attributes
+    assert "raw_probability" in attrs
+    assert "linear_score" in attrs
+    assert attrs["missing_features"] == []
+    assert attrs["feature_values"]["sensor.a"] == 2.0
+    assert attrs["feature_values"]["sensor.b"] == 1.0
