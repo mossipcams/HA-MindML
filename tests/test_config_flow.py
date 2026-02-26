@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from unittest.mock import MagicMock
 
 from custom_components.calibrated_logistic_regression.config_flow import (
@@ -307,3 +308,154 @@ def test_user_step_blank_ml_db_path_uses_appdaemon_default() -> None:
     )
 
     assert flow._draft["ml_db_path"] == "/homeassistant/appdaemon/ha_ml_data_layer.db"
+
+
+def test_wizard_features_step_accepts_list_payload_and_creates_entry() -> None:
+    flow = _new_flow()
+
+    asyncio.run(
+        flow.async_step_user(
+            {
+                "name": "Bedroom MindML",
+                "goal": "risk",
+                "ml_db_path": "/tmp/ha_ml_data_layer.db",
+            }
+        )
+    )
+
+    first_pair = asyncio.run(
+        flow.async_step_features(
+            {
+                "feature": ["sensor.a", "binary_sensor.window"],
+                "state": "on",
+                "threshold": 65.0,
+            }
+        )
+    )
+    assert first_pair["type"] == "form"
+    assert first_pair["step_id"] == "feature_more"
+
+    preview = asyncio.run(flow.async_step_feature_more({"next_action": "finish_features"}))
+    assert preview["type"] == "form"
+    assert preview["step_id"] == "preview"
+
+    created = asyncio.run(flow.async_step_preview({"confirm": True}))
+    assert created["type"] == "create_entry"
+    assert created["data"]["required_features"] == ["sensor.a", "binary_sensor.window"]
+    assert created["data"]["feature_states"] == {
+        "sensor.a": "on",
+        "binary_sensor.window": "on",
+    }
+
+
+def test_options_flow_features_accepts_list_payload_and_preserves_ml_settings() -> None:
+    entry = MagicMock()
+    entry.options = {
+        "required_features": ["sensor.a"],
+        "feature_states": {"sensor.a": "22.5"},
+        "state_mappings": {},
+        "feature_types": {"sensor.a": "numeric"},
+        "threshold": 50.0,
+        "ml_db_path": "/tmp/ha_ml_data_layer.db",
+        "ml_artifact_view": "vw_lightgbm_latest_model_artifact",
+        "ml_feature_source": "ml_snapshot",
+        "ml_feature_view": "vw_latest_feature_snapshot",
+    }
+    entry.data = {}
+
+    flow = ClrOptionsFlow(entry)
+    asyncio.run(
+        flow.async_step_features(
+            {
+                "feature": ["sensor.a", "binary_sensor.window"],
+                "state": "off",
+                "threshold": 70.0,
+            }
+        )
+    )
+    updated = asyncio.run(flow.async_step_feature_more({"next_action": "finish_features"}))
+
+    assert updated["type"] == "create_entry"
+    assert updated["data"]["required_features"] == ["sensor.a", "binary_sensor.window"]
+    assert updated["data"]["feature_states"] == {
+        "sensor.a": "off",
+        "binary_sensor.window": "off",
+    }
+    assert updated["data"]["ml_db_path"] == "/tmp/ha_ml_data_layer.db"
+    assert updated["data"]["ml_artifact_view"] == "vw_lightgbm_latest_model_artifact"
+    assert updated["data"]["ml_feature_source"] == "ml_snapshot"
+    assert updated["data"]["ml_feature_view"] == "vw_latest_feature_snapshot"
+
+
+def test_wizard_list_payload_updates_existing_feature_without_duplicates() -> None:
+    flow = _new_flow()
+    asyncio.run(
+        flow.async_step_user(
+            {
+                "name": "Living Room MindML",
+                "goal": "risk",
+                "ml_db_path": "/tmp/ha_ml_data_layer.db",
+            }
+        )
+    )
+
+    asyncio.run(
+        flow.async_step_features(
+            {
+                "feature": "sensor.a",
+                "state": "22.5",
+                "threshold": 60.0,
+            }
+        )
+    )
+    asyncio.run(flow.async_step_feature_more({"next_action": "add_feature"}))
+    asyncio.run(
+        flow.async_step_features(
+            {
+                "feature": ["sensor.a", "binary_sensor.window"],
+                "state": "off",
+                "threshold": 60.0,
+            }
+        )
+    )
+    asyncio.run(flow.async_step_feature_more({"next_action": "finish_features"}))
+    created = asyncio.run(flow.async_step_preview({"confirm": True}))
+
+    assert created["type"] == "create_entry"
+    assert created["data"]["required_features"] == ["sensor.a", "binary_sensor.window"]
+    assert created["data"]["feature_states"] == {
+        "sensor.a": "off",
+        "binary_sensor.window": "off",
+    }
+
+
+def test_wizard_logs_feature_normalization_and_finish_summary(caplog) -> None:
+    flow = _new_flow()
+    asyncio.run(
+        flow.async_step_user(
+            {
+                "name": "Office MindML",
+                "goal": "risk",
+                "ml_db_path": "/tmp/ha_ml_data_layer.db",
+            }
+        )
+    )
+    caplog.set_level(
+        logging.DEBUG,
+        logger="custom_components.calibrated_logistic_regression.config_flow",
+    )
+
+    asyncio.run(
+        flow.async_step_features(
+            {
+                "feature": ["sensor.a", "binary_sensor.window"],
+                "state": "on",
+                "threshold": 65.0,
+            }
+        )
+    )
+    asyncio.run(flow.async_step_feature_more({"next_action": "finish_features"}))
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("normalized_features" in message for message in messages)
+    assert any("finish_features" in message for message in messages)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import voluptuous as vol
@@ -38,6 +39,29 @@ from .paths import resolve_ml_db_path
 
 _DRAFT_FEATURE_PAIRS = "feature_pairs"
 _NEXT_ACTION = "next_action"
+_LOGGER = logging.getLogger(__name__)
+
+
+def _normalize_feature_input(raw_feature: Any) -> list[str]:
+    if isinstance(raw_feature, str):
+        candidates = [raw_feature]
+    elif isinstance(raw_feature, list | tuple | set):
+        candidates = [str(item) for item in raw_feature]
+    elif raw_feature is None:
+        candidates = []
+    else:
+        candidates = [str(raw_feature)]
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        for part in candidate.replace("\n", ",").split(","):
+            feature = part.strip()
+            if not feature or feature in seen:
+                continue
+            seen.add(feature)
+            normalized.append(feature)
+    return normalized
 
 
 def _build_user_schema() -> vol.Schema:
@@ -211,10 +235,16 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
         pairs: list[tuple[str, str]] = list(self._draft.get(_DRAFT_FEATURE_PAIRS, []))
 
         if user_input is not None:
-            feature = str(user_input.get("feature", "")).strip()
+            raw_feature = user_input.get("feature")
+            feature_values = _normalize_feature_input(raw_feature)
             state = str(user_input.get("state", "")).strip()
             default_threshold = float(user_input.get(CONF_THRESHOLD, default_threshold))
-            if feature == "":
+            _LOGGER.debug(
+                "wizard_features_input raw_type=%s normalized_features=%s",
+                type(raw_feature).__name__,
+                feature_values,
+            )
+            if not feature_values:
                 errors["feature"] = "required"
             if state == "":
                 errors["state"] = "required"
@@ -222,14 +252,16 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
             if not errors:
                 self._draft[CONF_THRESHOLD] = default_threshold
                 existing = {item[0]: index for index, item in enumerate(pairs)}
-                if feature in existing:
-                    pairs[existing[feature]] = (feature, state)
-                else:
-                    pairs.append((feature, state))
+                for feature in feature_values:
+                    if feature in existing:
+                        pairs[existing[feature]] = (feature, state)
+                    else:
+                        pairs.append((feature, state))
+                        existing[feature] = len(pairs) - 1
                 self._draft[_DRAFT_FEATURE_PAIRS] = pairs
                 return await self.async_step_feature_more()
 
-            default_feature = feature
+            default_feature = ", ".join(feature_values)
             default_state = state
 
         return self.async_show_form(
@@ -270,6 +302,11 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
             return await self.async_step_features()
 
         required_features, feature_states, feature_types, state_mappings = _pairs_to_feature_payload(pairs)
+        _LOGGER.debug(
+            "wizard_finish_features count=%d required_features=%s",
+            len(required_features),
+            required_features,
+        )
         self._draft[CONF_REQUIRED_FEATURES] = required_features
         self._draft[CONF_FEATURE_STATES] = feature_states
         self._draft[CONF_FEATURE_TYPES] = feature_types
@@ -544,10 +581,16 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
         )
 
         if user_input is not None:
-            feature = str(user_input.get("feature", "")).strip()
+            raw_feature = user_input.get("feature")
+            feature_values = _normalize_feature_input(raw_feature)
             state = str(user_input.get("state", "")).strip()
             default_threshold = float(user_input.get(CONF_THRESHOLD, default_threshold))
-            if feature == "":
+            _LOGGER.debug(
+                "options_features_input raw_type=%s normalized_features=%s",
+                type(raw_feature).__name__,
+                feature_values,
+            )
+            if not feature_values:
                 errors["feature"] = "required"
             if state == "":
                 errors["state"] = "required"
@@ -555,14 +598,16 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
             if not errors:
                 self._draft[CONF_THRESHOLD] = default_threshold
                 existing = {item[0]: index for index, item in enumerate(pairs)}
-                if feature in existing:
-                    pairs[existing[feature]] = (feature, state)
-                else:
-                    pairs.append((feature, state))
+                for feature in feature_values:
+                    if feature in existing:
+                        pairs[existing[feature]] = (feature, state)
+                    else:
+                        pairs.append((feature, state))
+                        existing[feature] = len(pairs) - 1
                 self._draft[_DRAFT_FEATURE_PAIRS] = pairs
                 return await self.async_step_feature_more()
 
-            default_feature = feature
+            default_feature = ", ".join(feature_values)
             default_state = state
 
         return self.async_show_form(
@@ -603,6 +648,11 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
             return await self.async_step_features()
 
         required_features, feature_states, feature_types, state_mappings = _pairs_to_feature_payload(pairs)
+        _LOGGER.debug(
+            "options_finish_features count=%d required_features=%s",
+            len(required_features),
+            required_features,
+        )
         return self.async_create_entry(
             title="",
             data=self._merged_options(
