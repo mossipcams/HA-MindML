@@ -3,8 +3,8 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import MagicMock
 
-from custom_components.calibrated_logistic_regression.const import DOMAIN
-from custom_components.calibrated_logistic_regression.diagnostics import (
+from custom_components.mindml.const import DOMAIN
+from custom_components.mindml.diagnostics import (
     async_get_config_entry_diagnostics,
 )
 

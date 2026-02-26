@@ -1,4 +1,4 @@
-"""Calibrated Logistic Regression integration."""
+"""MindML integration."""
 
 from __future__ import annotations
 

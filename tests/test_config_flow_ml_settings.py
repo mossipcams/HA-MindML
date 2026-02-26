@@ -106,8 +106,8 @@ sys.modules.setdefault("homeassistant.data_entry_flow", data_entry_flow)
 sys.modules.setdefault("homeassistant.helpers", helpers)
 sys.modules.setdefault("homeassistant.helpers.selector", selector)
 
-from custom_components.calibrated_logistic_regression.config_flow import _build_user_schema
-from custom_components.calibrated_logistic_regression.const import (
+from custom_components.mindml.config_flow import _build_user_schema
+from custom_components.mindml.const import (
     DEFAULT_ML_ARTIFACT_VIEW,
 )
 

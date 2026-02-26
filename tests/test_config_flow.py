@@ -4,7 +4,7 @@ import asyncio
 import logging
 from unittest.mock import MagicMock
 
-from custom_components.calibrated_logistic_regression.config_flow import (
+from custom_components.mindml.config_flow import (
     CalibratedLogisticRegressionConfigFlow,
     ClrOptionsFlow,
 )
@@ -400,7 +400,7 @@ def test_wizard_logs_feature_normalization_and_finish_summary(caplog) -> None:
     )
     caplog.set_level(
         logging.DEBUG,
-        logger="custom_components.calibrated_logistic_regression.config_flow",
+        logger="custom_components.mindml.config_flow",
     )
 
     asyncio.run(

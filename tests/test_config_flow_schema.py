@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from custom_components.calibrated_logistic_regression.config_flow import (
+from custom_components.mindml.config_flow import (
     _build_features_schema,
     _build_user_schema,
 )

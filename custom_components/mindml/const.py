@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-DOMAIN = "calibrated_logistic_regression"
+DOMAIN = "mindml"
 PLATFORMS: list[str] = ["sensor"]
 
 CONF_NAME = "name"

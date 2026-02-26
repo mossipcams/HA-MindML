@@ -3,12 +3,12 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
-from custom_components.calibrated_logistic_regression import (
+from custom_components.mindml import (
     async_setup,
     async_setup_entry,
     async_unload_entry,
 )
-from custom_components.calibrated_logistic_regression.const import DOMAIN
+from custom_components.mindml.const import DOMAIN
 
 
 def test_async_setup_initializes_domain_data() -> None:

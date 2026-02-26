@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 from homeassistant.core import State
 
-from custom_components.calibrated_logistic_regression.sensor import CalibratedLogisticRegressionSensor
+from custom_components.mindml.sensor import CalibratedLogisticRegressionSensor
 
 
 def test_config_entry_to_sensor_probability_smoke_path(monkeypatch) -> None:
@@ -20,8 +20,8 @@ def test_config_entry_to_sensor_probability_smoke_path(monkeypatch) -> None:
             self.kwargs = kwargs
 
         def load(self):
-            from custom_components.calibrated_logistic_regression.lightgbm_inference import LightGBMModelSpec
-            from custom_components.calibrated_logistic_regression.model_provider import ModelProviderResult
+            from custom_components.mindml.lightgbm_inference import LightGBMModelSpec
+            from custom_components.mindml.model_provider import ModelProviderResult
 
             return ModelProviderResult(
                 model=LightGBMModelSpec(
@@ -34,7 +34,7 @@ def test_config_entry_to_sensor_probability_smoke_path(monkeypatch) -> None:
             )
 
     monkeypatch.setattr(
-        "custom_components.calibrated_logistic_regression.sensor.SqliteLightGBMModelProvider",
+        "custom_components.mindml.sensor.SqliteLightGBMModelProvider",
         _Provider,
     )
 

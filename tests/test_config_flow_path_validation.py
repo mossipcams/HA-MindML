@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import MagicMock
 
-from custom_components.calibrated_logistic_regression.config_flow import (
+from custom_components.mindml.config_flow import (
     CalibratedLogisticRegressionConfigFlow,
     ClrOptionsFlow,
 )

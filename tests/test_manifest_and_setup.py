@@ -12,11 +12,11 @@ if str(PROJECT_ROOT) not in sys.path:
 
 
 def test_manifest_contains_required_fields() -> None:
-    manifest_path = Path("custom_components/calibrated_logistic_regression/manifest.json")
+    manifest_path = Path("custom_components/mindml/manifest.json")
     assert manifest_path.exists()
 
     manifest = json.loads(manifest_path.read_text())
-    assert manifest["domain"] == "calibrated_logistic_regression"
+    assert manifest["domain"] == "mindml"
     assert manifest["name"]
     assert manifest["version"] == "0.3.7"
     assert manifest["config_flow"] is True
@@ -24,7 +24,7 @@ def test_manifest_contains_required_fields() -> None:
 
 def test_integration_module_exports_setup_functions() -> None:
     integration = importlib.import_module(
-        "custom_components.calibrated_logistic_regression"
+        "custom_components.mindml"
     )
 
     assert hasattr(integration, "async_setup")

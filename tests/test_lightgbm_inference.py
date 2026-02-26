@@ -13,7 +13,7 @@ sys.modules.setdefault("homeassistant", homeassistant)
 sys.modules.setdefault("homeassistant.config_entries", config_entries)
 sys.modules.setdefault("homeassistant.core", core)
 
-from custom_components.calibrated_logistic_regression.lightgbm_inference import (
+from custom_components.mindml.lightgbm_inference import (
     LightGBMModelSpec,
     run_lightgbm_inference,
 )

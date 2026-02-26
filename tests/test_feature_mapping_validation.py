@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from custom_components.calibrated_logistic_regression.feature_mapping import (
+from custom_components.mindml.feature_mapping import (
     FEATURE_TYPE_CATEGORICAL,
     FEATURE_TYPE_NUMERIC,
     infer_feature_types_from_states,

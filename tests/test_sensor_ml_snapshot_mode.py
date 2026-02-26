@@ -55,7 +55,7 @@ sys.modules.setdefault("homeassistant.helpers.entity_platform", entity_platform)
 sys.modules.setdefault("homeassistant.helpers.event", event_helpers)
 sys.modules.setdefault("homeassistant.helpers.restore_state", restore_state)
 
-from custom_components.calibrated_logistic_regression.sensor import CalibratedLogisticRegressionSensor
+from custom_components.mindml.sensor import CalibratedLogisticRegressionSensor
 
 
 class _ModelProvider:
@@ -63,8 +63,8 @@ class _ModelProvider:
         self.kwargs = kwargs
 
     def load(self):
-        from custom_components.calibrated_logistic_regression.lightgbm_inference import LightGBMModelSpec
-        from custom_components.calibrated_logistic_regression.model_provider import ModelProviderResult
+        from custom_components.mindml.lightgbm_inference import LightGBMModelSpec
+        from custom_components.mindml.model_provider import ModelProviderResult
 
         return ModelProviderResult(
             model=LightGBMModelSpec(
@@ -82,7 +82,7 @@ class _FeatureProvider:
         self.kwargs = kwargs
 
     def load(self):
-        from custom_components.calibrated_logistic_regression.feature_provider import FeatureVectorResult
+        from custom_components.mindml.feature_provider import FeatureVectorResult
 
         return FeatureVectorResult(
             feature_values={"event_count": 3.0},
@@ -93,11 +93,11 @@ class _FeatureProvider:
 
 def test_sensor_can_use_ml_snapshot_feature_source(monkeypatch) -> None:
     monkeypatch.setattr(
-        "custom_components.calibrated_logistic_regression.sensor.SqliteLightGBMModelProvider",
+        "custom_components.mindml.sensor.SqliteLightGBMModelProvider",
         _ModelProvider,
     )
     monkeypatch.setattr(
-        "custom_components.calibrated_logistic_regression.sensor.SqliteSnapshotFeatureProvider",
+        "custom_components.mindml.sensor.SqliteSnapshotFeatureProvider",
         _FeatureProvider,
     )
 

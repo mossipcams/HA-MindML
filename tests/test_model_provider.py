@@ -12,8 +12,8 @@ sys.modules.setdefault("homeassistant", homeassistant)
 sys.modules.setdefault("homeassistant.config_entries", config_entries)
 sys.modules.setdefault("homeassistant.core", core)
 
-from custom_components.calibrated_logistic_regression.ml_artifact import LightGBMModelArtifact
-from custom_components.calibrated_logistic_regression.model_provider import (
+from custom_components.mindml.ml_artifact import LightGBMModelArtifact
+from custom_components.mindml.model_provider import (
     SqliteLightGBMModelProvider,
 )
 

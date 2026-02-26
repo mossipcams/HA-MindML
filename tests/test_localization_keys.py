@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 def test_strings_contains_wizard_and_options_labels() -> None:
-    path = Path("custom_components/calibrated_logistic_regression/strings.json")
+    path = Path("custom_components/mindml/strings.json")
     strings = json.loads(path.read_text())
 
     config_steps = strings["config"]["step"]
@@ -31,7 +31,7 @@ def test_strings_contains_wizard_and_options_labels() -> None:
 
 
 def test_features_step_description_mentions_inline_states() -> None:
-    path = Path("custom_components/calibrated_logistic_regression/strings.json")
+    path = Path("custom_components/mindml/strings.json")
     strings = json.loads(path.read_text())
 
     config_features_description = strings["config"]["step"]["features"]["description"]

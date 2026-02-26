@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 from homeassistant.core import State
 
-from custom_components.calibrated_logistic_regression.const import DOMAIN
-from custom_components.calibrated_logistic_regression.sensor import (
+from custom_components.mindml.const import DOMAIN
+from custom_components.mindml.sensor import (
     CalibratedLogisticRegressionSensor,
     async_setup_entry,
 )
@@ -55,8 +55,8 @@ def test_sensor_unavailable_reason_when_required_feature_missing(monkeypatch) ->
             self.kwargs = kwargs
 
         def load(self):
-            from custom_components.calibrated_logistic_regression.lightgbm_inference import LightGBMModelSpec
-            from custom_components.calibrated_logistic_regression.model_provider import ModelProviderResult
+            from custom_components.mindml.lightgbm_inference import LightGBMModelSpec
+            from custom_components.mindml.model_provider import ModelProviderResult
 
             return ModelProviderResult(
                 model=LightGBMModelSpec(feature_names=["sensor.a", "sensor.b"], model_payload={"intercept": 0.0, "weights": [1.0, 1.0]}),
@@ -66,7 +66,7 @@ def test_sensor_unavailable_reason_when_required_feature_missing(monkeypatch) ->
             )
 
     monkeypatch.setattr(
-        "custom_components.calibrated_logistic_regression.sensor.SqliteLightGBMModelProvider",
+        "custom_components.mindml.sensor.SqliteLightGBMModelProvider",
         _Provider,
     )
 
@@ -94,8 +94,8 @@ def test_sensor_updates_probability_attributes(monkeypatch) -> None:
             _Provider.last_kwargs = dict(kwargs)
 
         def load(self):
-            from custom_components.calibrated_logistic_regression.lightgbm_inference import LightGBMModelSpec
-            from custom_components.calibrated_logistic_regression.model_provider import ModelProviderResult
+            from custom_components.mindml.lightgbm_inference import LightGBMModelSpec
+            from custom_components.mindml.model_provider import ModelProviderResult
 
             return ModelProviderResult(
                 model=LightGBMModelSpec(feature_names=["sensor.a", "sensor.b"], model_payload={"intercept": -1.0, "weights": [1.0, 0.0]}),
@@ -105,7 +105,7 @@ def test_sensor_updates_probability_attributes(monkeypatch) -> None:
             )
 
     monkeypatch.setattr(
-        "custom_components.calibrated_logistic_regression.sensor.SqliteLightGBMModelProvider",
+        "custom_components.mindml.sensor.SqliteLightGBMModelProvider",
         _Provider,
     )
 
@@ -136,8 +136,8 @@ def test_sensor_resolves_default_ml_db_path_when_missing(monkeypatch) -> None:
             _Provider.last_kwargs = dict(kwargs)
 
         def load(self):
-            from custom_components.calibrated_logistic_regression.lightgbm_inference import LightGBMModelSpec
-            from custom_components.calibrated_logistic_regression.model_provider import ModelProviderResult
+            from custom_components.mindml.lightgbm_inference import LightGBMModelSpec
+            from custom_components.mindml.model_provider import ModelProviderResult
 
             return ModelProviderResult(
                 model=LightGBMModelSpec(feature_names=["sensor.a"], model_payload={"intercept": 0.0, "weights": [0.0]}),
@@ -147,7 +147,7 @@ def test_sensor_resolves_default_ml_db_path_when_missing(monkeypatch) -> None:
             )
 
     monkeypatch.setattr(
-        "custom_components.calibrated_logistic_regression.sensor.SqliteLightGBMModelProvider",
+        "custom_components.mindml.sensor.SqliteLightGBMModelProvider",
         _Provider,
     )
 
@@ -168,8 +168,8 @@ def test_sensor_hass_state_keeps_configured_features_when_model_has_abstract_nam
             self.kwargs = kwargs
 
         def load(self):
-            from custom_components.calibrated_logistic_regression.lightgbm_inference import LightGBMModelSpec
-            from custom_components.calibrated_logistic_regression.model_provider import ModelProviderResult
+            from custom_components.mindml.lightgbm_inference import LightGBMModelSpec
+            from custom_components.mindml.model_provider import ModelProviderResult
 
             return ModelProviderResult(
                 model=LightGBMModelSpec(
@@ -182,7 +182,7 @@ def test_sensor_hass_state_keeps_configured_features_when_model_has_abstract_nam
             )
 
     monkeypatch.setattr(
-        "custom_components.calibrated_logistic_regression.sensor.SqliteLightGBMModelProvider",
+        "custom_components.mindml.sensor.SqliteLightGBMModelProvider",
         _Provider,
     )
 
@@ -199,8 +199,8 @@ def test_sensor_restores_state_from_last_known(monkeypatch) -> None:
             self.kwargs = kwargs
 
         def load(self):
-            from custom_components.calibrated_logistic_regression.lightgbm_inference import LightGBMModelSpec
-            from custom_components.calibrated_logistic_regression.model_provider import ModelProviderResult
+            from custom_components.mindml.lightgbm_inference import LightGBMModelSpec
+            from custom_components.mindml.model_provider import ModelProviderResult
 
             return ModelProviderResult(
                 model=LightGBMModelSpec(
@@ -226,7 +226,7 @@ def test_sensor_restores_state_from_last_known(monkeypatch) -> None:
         }
 
     monkeypatch.setattr(
-        "custom_components.calibrated_logistic_regression.sensor.SqliteLightGBMModelProvider",
+        "custom_components.mindml.sensor.SqliteLightGBMModelProvider",
         _Provider,
     )
 
@@ -257,8 +257,8 @@ def test_sensor_handles_no_previous_state(monkeypatch) -> None:
             self.kwargs = kwargs
 
         def load(self):
-            from custom_components.calibrated_logistic_regression.lightgbm_inference import LightGBMModelSpec
-            from custom_components.calibrated_logistic_regression.model_provider import ModelProviderResult
+            from custom_components.mindml.lightgbm_inference import LightGBMModelSpec
+            from custom_components.mindml.model_provider import ModelProviderResult
 
             return ModelProviderResult(
                 model=LightGBMModelSpec(
@@ -271,7 +271,7 @@ def test_sensor_handles_no_previous_state(monkeypatch) -> None:
             )
 
     monkeypatch.setattr(
-        "custom_components.calibrated_logistic_regression.sensor.SqliteLightGBMModelProvider",
+        "custom_components.mindml.sensor.SqliteLightGBMModelProvider",
         _Provider,
     )
 

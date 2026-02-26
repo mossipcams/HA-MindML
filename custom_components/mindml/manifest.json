@@ -1,5 +1,5 @@
 {
-  "domain": "calibrated_logistic_regression",
+  "domain": "mindml",
   "name": "MindML Probability Sensor",
   "version": "0.3.18",
   "documentation": "https://github.com/mossipcams/HA-MindML",
@@ -10,6 +10,6 @@
   ],
   "requirements": [],
   "loggers": [
-    "custom_components.calibrated_logistic_regression"
+    "custom_components.mindml"
   ]
 }

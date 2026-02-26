@@ -15,7 +15,7 @@ sys.modules.setdefault("homeassistant", homeassistant)
 sys.modules.setdefault("homeassistant.config_entries", config_entries)
 sys.modules.setdefault("homeassistant.core", core)
 
-from custom_components.calibrated_logistic_regression.ml_artifact import (
+from custom_components.mindml.ml_artifact import (
     load_latest_lightgbm_model_artifact,
 )
 
