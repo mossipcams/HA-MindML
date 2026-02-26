@@ -112,7 +112,7 @@ def test_options_flow_decision_updates_threshold() -> None:
     assert result["data"]["threshold"] == 72.5
 
 
-def test_options_flow_features_updates_required_features_and_mappings() -> None:
+def test_options_flow_features_updates_required_features() -> None:
     entry = MagicMock()
     entry.options = {}
     entry.data = {"required_features": ["sensor.a"], "state_mappings": {}}
@@ -122,14 +122,12 @@ def test_options_flow_features_updates_required_features_and_mappings() -> None:
         flow.async_step_features(
             {
                 "required_features": ["sensor.a", "binary_sensor.window"],
-                "state_mappings": '{"binary_sensor.window": {"on": 1, "off": 0}}',
             }
         )
     )
 
     assert result["type"] == "create_entry"
     assert result["data"]["required_features"] == ["sensor.a", "binary_sensor.window"]
-    assert result["data"]["state_mappings"] == {"binary_sensor.window": {"on": 1.0, "off": 0.0}}
 
 
 def test_user_step_allows_blank_ml_db_path_and_continues() -> None:

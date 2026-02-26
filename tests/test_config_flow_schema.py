@@ -20,10 +20,10 @@ def test_user_schema_contains_name_goal_and_ml_settings() -> None:
 
 
 def test_features_schema_contains_required_features() -> None:
-    schema = _build_features_schema(["sensor.a"], "{}")
+    schema = _build_features_schema(["sensor.a"])
     keys = [str(k.schema) for k in schema.schema]
     assert "required_features" in keys
-    assert "state_mappings" in keys
+    assert "state_mappings" not in keys
 
 
 def test_states_schema_contains_feature_fields_and_threshold() -> None:

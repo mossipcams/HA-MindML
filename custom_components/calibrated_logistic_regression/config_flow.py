@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import voluptuous as vol
@@ -35,7 +34,6 @@ from .feature_mapping import (
     infer_feature_types_from_states,
     infer_state_mappings_from_states,
     parse_required_features,
-    parse_state_mappings,
 )
 from .paths import resolve_ml_db_path
 
@@ -85,13 +83,12 @@ def _build_user_schema() -> vol.Schema:
     )
 
 
-def _build_features_schema(default_features: list[str], default_mappings: str) -> vol.Schema:
+def _build_features_schema(default_features: list[str]) -> vol.Schema:
     return vol.Schema(
         {
             vol.Required(CONF_REQUIRED_FEATURES, default=default_features): selector.EntitySelector(
                 selector.EntitySelectorConfig(multiple=True)
             ),
-            vol.Optional(CONF_STATE_MAPPINGS, default=default_mappings): str,
         }
     )
 
@@ -163,24 +160,19 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
         errors: dict[str, str] = {}
         if user_input is not None:
             required_features = parse_required_features(user_input[CONF_REQUIRED_FEATURES])
-            state_mappings = parse_state_mappings(str(user_input.get(CONF_STATE_MAPPINGS, "{}")))
             if not required_features:
                 errors[CONF_REQUIRED_FEATURES] = "required"
-            if state_mappings is None:
-                errors[CONF_STATE_MAPPINGS] = "invalid_state_mappings"
             if not errors:
                 self._draft[CONF_REQUIRED_FEATURES] = required_features
-                self._draft[CONF_STATE_MAPPINGS] = state_mappings
                 return await self.async_step_states()
 
         default_features = list(self._draft.get(CONF_REQUIRED_FEATURES, []))
-        default_mappings = json.dumps(self._draft.get(CONF_STATE_MAPPINGS, {}))
         return self.async_show_form(
             step_id="features",
-            data_schema=_build_features_schema(default_features, default_mappings),
+            data_schema=_build_features_schema(default_features),
             errors=errors,
             description_placeholders={
-                "features_help": "Pick entities and optionally provide mapping JSON for categorical states.",
+                "features_help": "Pick entities like sensor.temperature or binary_sensor.door.",
             },
         )
 
@@ -204,19 +196,12 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
                     for feature in required_features
                 }
 
-                explicit_state_mappings = {
-                    str(entity_id): {str(state): float(value) for state, value in states.items()}
-                    for entity_id, states in dict(self._draft.get(CONF_STATE_MAPPINGS, {})).items()
-                    if isinstance(states, dict)
-                }
                 inferred_state_mappings = infer_state_mappings_from_states(self._draft[CONF_FEATURE_STATES])
                 final_state_mappings: dict[str, dict[str, float]] = {}
                 for feature in required_features:
                     if self._draft[CONF_FEATURE_TYPES][feature] != FEATURE_TYPE_CATEGORICAL:
                         continue
-                    if feature in explicit_state_mappings:
-                        final_state_mappings[feature] = explicit_state_mappings[feature]
-                    elif feature in inferred_state_mappings:
+                    if feature in inferred_state_mappings:
                         final_state_mappings[feature] = inferred_state_mappings[feature]
                     else:
                         final_state_mappings[feature] = {
@@ -392,39 +377,30 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
         errors: dict[str, str] = {}
         if user_input is not None:
             required_features = parse_required_features(user_input[CONF_REQUIRED_FEATURES])
-            state_mappings = parse_state_mappings(str(user_input.get(CONF_STATE_MAPPINGS, "{}")))
             if not required_features:
                 errors[CONF_REQUIRED_FEATURES] = "required"
-            if state_mappings is None:
-                errors[CONF_STATE_MAPPINGS] = "invalid_state_mappings"
             if not errors:
                 return self.async_create_entry(
                     title="",
-                    data={
-                        CONF_REQUIRED_FEATURES: required_features,
-                        CONF_STATE_MAPPINGS: state_mappings,
-                    },
+                    data={CONF_REQUIRED_FEATURES: required_features},
                 )
 
         default_features = self._config_entry.options.get(
             CONF_REQUIRED_FEATURES,
             self._config_entry.data.get(CONF_REQUIRED_FEATURES, []),
         )
-        default_state_mappings = self._config_entry.options.get(
-            CONF_STATE_MAPPINGS,
-            self._config_entry.data.get(CONF_STATE_MAPPINGS, {}),
-        )
         return self.async_show_form(
             step_id="features",
-            data_schema=_build_features_schema(default_features, json.dumps(default_state_mappings)),
+            data_schema=_build_features_schema(default_features),
             errors=errors,
             description_placeholders={
-                "features_help": "Pick entities and optionally set mapping JSON for categorical states."
+                "features_help": "Pick entities to include as model features."
             },
         )
 
     async def async_step_diagnostics(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         del user_input
+        runtime = self.hass.data.get(DOMAIN, {}).get(self._config_entry.entry_id, {}).get("runtime", {})
         return self.async_show_form(
             step_id="diagnostics",
             data_schema=vol.Schema({}),
@@ -434,6 +410,8 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
                         CONF_REQUIRED_FEATURES,
                         self._config_entry.data.get(CONF_REQUIRED_FEATURES, []),
                     )
-                )
+                ),
+                "missing_features": ", ".join(runtime.get("missing_features", [])) or "none",
+                "last_computed_at": str(runtime.get("last_computed_at", "n/a")),
             },
         )

@@ -15,10 +15,9 @@
       },
       "features": {
         "title": "Select Features",
-        "description": "Choose entities used as runtime features and optional state mappings. {features_help}",
+        "description": "Choose entities used as runtime features. {features_help}",
         "data": {
-          "required_features": "Required features",
-          "state_mappings": "State mappings JSON"
+          "required_features": "Required features"
         }
       },
       "states": {
@@ -78,15 +77,14 @@
       },
       "features": {
         "title": "Features",
-        "description": "Manage feature entities and optional categorical state mappings.",
+        "description": "Manage feature entities.",
         "data": {
-          "required_features": "Required features",
-          "state_mappings": "State mappings JSON"
+          "required_features": "Required features"
         }
       },
       "diagnostics": {
         "title": "Diagnostics",
-        "description": "Review current feature coverage and mapping health."
+        "description": "Configured features: {configured_features}. Missing features: {missing_features}. Last computed: {last_computed_at}."
       }
     }
   }
