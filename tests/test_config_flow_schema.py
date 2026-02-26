@@ -27,9 +27,19 @@ def test_features_schema_contains_required_features() -> None:
     )
     keys = [str(k.schema) for k in schema.schema]
     assert "required_features" in keys
-    assert "sensor.a" in keys
+    assert "sensor.a state" in keys
     assert "threshold" in keys
     assert "state_mappings" not in keys
+
+
+def test_features_schema_orders_state_fields_before_threshold() -> None:
+    schema = _build_features_schema(
+        ["sensor.a", "binary_sensor.window"],
+        {"sensor.a": "22", "binary_sensor.window": ""},
+        50.0,
+    )
+    keys = [str(k.schema) for k in schema.schema]
+    assert keys == ["required_features", "sensor.a state", "binary_sensor.window state", "threshold"]
 
 
 def test_states_schema_contains_feature_fields_and_threshold() -> None:

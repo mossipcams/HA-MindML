@@ -93,11 +93,15 @@ def _build_features_schema(
         vol.Required(CONF_REQUIRED_FEATURES, default=default_features): selector.EntitySelector(
             selector.EntitySelectorConfig(multiple=True)
         ),
-        vol.Optional(CONF_THRESHOLD, default=default_threshold): vol.Coerce(float),
     }
     for feature in default_features:
-        schema[vol.Optional(feature, default=states.get(feature, ""))] = str
+        schema[vol.Optional(_feature_state_field_name(feature), default=states.get(feature, ""))] = str
+    schema[vol.Optional(CONF_THRESHOLD, default=default_threshold)] = vol.Coerce(float)
     return vol.Schema(schema)
+
+
+def _feature_state_field_name(feature: str) -> str:
+    return f"{feature} state"
 
 
 def _build_states_schema(
@@ -177,9 +181,10 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
                 errors[CONF_REQUIRED_FEATURES] = "required"
             feature_states: dict[str, str] = {}
             for feature in required_features:
-                raw_value = user_input.get(feature)
+                state_field = _feature_state_field_name(feature)
+                raw_value = user_input.get(state_field)
                 if raw_value is None or str(raw_value).strip() == "":
-                    errors[feature] = "required"
+                    errors[state_field] = "required"
                     feature_states[feature] = ""
                     continue
                 feature_states[feature] = str(raw_value)
@@ -442,9 +447,10 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
                 errors[CONF_REQUIRED_FEATURES] = "required"
             feature_states: dict[str, str] = {}
             for feature in required_features:
-                raw_value = user_input.get(feature)
+                state_field = _feature_state_field_name(feature)
+                raw_value = user_input.get(state_field)
                 if raw_value is None or str(raw_value).strip() == "":
-                    errors[feature] = "required"
+                    errors[state_field] = "required"
                     feature_states[feature] = ""
                     continue
                 feature_states[feature] = str(raw_value)

@@ -42,3 +42,5 @@ def test_features_step_description_mentions_inline_states() -> None:
 
     assert "state" in config_features_description.casefold()
     assert "state" in options_features_description.casefold()
+    assert "state field" in config_features_description.casefold()
+    assert "state field" in options_features_description.casefold()

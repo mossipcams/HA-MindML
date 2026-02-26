@@ -40,8 +40,8 @@ def test_wizard_happy_path_creates_entry_from_entities_states_and_threshold() ->
         flow.async_step_features(
             {
                 "required_features": ["sensor.a", "binary_sensor.window"],
-                "sensor.a": "22.5",
-                "binary_sensor.window": "on",
+                "sensor.a state": "22.5",
+                "binary_sensor.window state": "on",
                 "threshold": 65.0,
             }
         )
@@ -122,8 +122,8 @@ def test_options_flow_features_updates_feature_configuration_inline() -> None:
         flow.async_step_features(
             {
                 "required_features": ["sensor.a", "binary_sensor.window"],
-                "sensor.a": "23.0",
-                "binary_sensor.window": "off",
+                "sensor.a state": "23.0",
+                "binary_sensor.window state": "off",
                 "threshold": 65.0,
             }
         )
@@ -191,19 +191,19 @@ def test_wizard_features_step_requires_state_for_new_feature_and_shows_blank_box
         flow.async_step_features(
             {
                 "required_features": ["sensor.a", "binary_sensor.window"],
-                "sensor.a": "22.5",
+                "sensor.a state": "22.5",
                 "threshold": 65.0,
             }
         )
     )
     assert features_result["type"] == "form"
     assert features_result["step_id"] == "features"
-    assert features_result["errors"]["binary_sensor.window"] == "required"
+    assert features_result["errors"]["binary_sensor.window state"] == "required"
 
     followup_schema_keys = [str(k.schema) for k in features_result["data_schema"].schema]
     assert "required_features" in followup_schema_keys
-    assert "sensor.a" in followup_schema_keys
-    assert "binary_sensor.window" in followup_schema_keys
+    assert "sensor.a state" in followup_schema_keys
+    assert "binary_sensor.window state" in followup_schema_keys
 
 
 def test_options_features_step_requires_state_for_new_feature_and_shows_blank_box() -> None:
@@ -221,16 +221,16 @@ def test_options_features_step_requires_state_for_new_feature_and_shows_blank_bo
         flow.async_step_features(
             {
                 "required_features": ["sensor.a", "binary_sensor.window"],
-                "sensor.a": "23.0",
+                "sensor.a state": "23.0",
                 "threshold": 65.0,
             }
         )
     )
     assert features_result["type"] == "form"
     assert features_result["step_id"] == "features"
-    assert features_result["errors"]["binary_sensor.window"] == "required"
+    assert features_result["errors"]["binary_sensor.window state"] == "required"
 
     followup_schema_keys = [str(k.schema) for k in features_result["data_schema"].schema]
     assert "required_features" in followup_schema_keys
-    assert "sensor.a" in followup_schema_keys
-    assert "binary_sensor.window" in followup_schema_keys
+    assert "sensor.a state" in followup_schema_keys
+    assert "binary_sensor.window state" in followup_schema_keys
