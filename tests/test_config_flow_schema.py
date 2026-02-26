@@ -21,24 +21,25 @@ def test_user_schema_contains_name_goal_and_ml_settings() -> None:
 
 def test_features_schema_contains_required_features() -> None:
     schema = _build_features_schema(
-        [("sensor.a", "22")],
+        "sensor.a",
+        "22",
         50.0,
     )
     keys = [str(k.schema) for k in schema.schema]
-    assert "feature_1" in keys
-    assert "state_1" in keys
-    assert "add_row" in keys
+    assert "feature" in keys
+    assert "state" in keys
     assert "threshold" in keys
     assert "state_mappings" not in keys
 
 
 def test_features_schema_orders_state_fields_before_threshold() -> None:
     schema = _build_features_schema(
-        [("sensor.a", "22"), ("binary_sensor.window", "")],
+        "sensor.a",
+        "22",
         50.0,
     )
     keys = [str(k.schema) for k in schema.schema]
-    assert keys == ["feature_1", "state_1", "feature_2", "state_2", "add_row", "remove_row", "threshold"]
+    assert keys == ["feature", "state", "threshold"]
 
 
 def test_states_schema_contains_feature_fields_and_threshold() -> None:

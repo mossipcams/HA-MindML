@@ -15,10 +15,18 @@
       },
       "features": {
         "title": "Select Features",
-        "description": "Choose entities used as runtime features and fill the state field for each feature. {features_help}",
+        "description": "Enter one feature and state pair. {features_help}",
         "data": {
-          "required_features": "Required features",
+          "feature": "Feature",
+          "state": "State",
           "threshold": "Decision threshold (%)"
+        }
+      },
+      "feature_more": {
+        "title": "Feature Pairs",
+        "description": "You have added {feature_count} feature/state pair(s). Add another pair or finish.",
+        "data": {
+          "next_action": "Next action"
         }
       },
       "states": {
@@ -78,10 +86,18 @@
       },
       "features": {
         "title": "Features",
-        "description": "Manage feature entities and edit the state field for each feature.",
+        "description": "Enter one feature and state pair. {features_help}",
         "data": {
-          "required_features": "Required features",
+          "feature": "Feature",
+          "state": "State",
           "threshold": "Decision threshold (%)"
+        }
+      },
+      "feature_more": {
+        "title": "Feature Pairs",
+        "description": "You have configured {feature_count} feature/state pair(s). Add another pair or finish.",
+        "data": {
+          "next_action": "Next action"
         }
       },
       "states": {

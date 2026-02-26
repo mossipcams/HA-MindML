@@ -11,6 +11,7 @@ def test_strings_contains_wizard_and_options_labels() -> None:
     config_steps = strings["config"]["step"]
     assert "user" in config_steps
     assert "features" in config_steps
+    assert "feature_more" in config_steps
     assert "states" in config_steps
     assert "preview" in config_steps
 
@@ -19,6 +20,7 @@ def test_strings_contains_wizard_and_options_labels() -> None:
 
     options_steps = strings["options"]["step"]
     assert "features" in options_steps
+    assert "feature_more" in options_steps
     assert "states" in options_steps
     assert "model" in options_steps
     assert "feature_source" in options_steps
@@ -42,5 +44,5 @@ def test_features_step_description_mentions_inline_states() -> None:
 
     assert "state" in config_features_description.casefold()
     assert "state" in options_features_description.casefold()
-    assert "state field" in config_features_description.casefold()
-    assert "state field" in options_features_description.casefold()
+    assert "one feature" in config_features_description.casefold()
+    assert "one feature" in options_features_description.casefold()
