@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from custom_components.calibrated_logistic_regression.config_flow import (
     _build_features_schema,
-    _build_preview_schema,
-    _build_states_schema,
     _build_user_schema,
 )
 
@@ -40,16 +38,3 @@ def test_features_schema_orders_state_fields_before_threshold() -> None:
     )
     keys = [str(k.schema) for k in schema.schema]
     assert keys == ["feature", "state", "threshold"]
-
-
-def test_states_schema_contains_feature_fields_and_threshold() -> None:
-    schema = _build_states_schema(["sensor.a"], {"sensor.a": "22"}, 50.0)
-    keys = [str(k.schema) for k in schema.schema]
-    assert "sensor.a" in keys
-    assert "threshold" in keys
-
-
-def test_preview_schema_has_confirmation_toggle() -> None:
-    schema = _build_preview_schema()
-    keys = [str(k.schema) for k in schema.schema]
-    assert "confirm" in keys

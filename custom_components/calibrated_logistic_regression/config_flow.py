@@ -38,9 +38,7 @@ from .feature_mapping import (
 from .paths import resolve_ml_db_path
 
 _DRAFT_FEATURE_PAIRS = "feature_pairs"
-_NEXT_ACTION = "next_action"
 _LOGGER = logging.getLogger(__name__)
-
 
 def _normalize_feature_input(raw_feature: Any) -> list[str]:
     if isinstance(raw_feature, str):
@@ -62,7 +60,6 @@ def _normalize_feature_input(raw_feature: Any) -> list[str]:
             seen.add(feature)
             normalized.append(feature)
     return normalized
-
 
 def _build_user_schema() -> vol.Schema:
     return vol.Schema(
@@ -108,7 +105,6 @@ def _build_user_schema() -> vol.Schema:
         }
     )
 
-
 def _build_features_schema(
     default_feature: str = "",
     default_state: str = "",
@@ -123,23 +119,6 @@ def _build_features_schema(
             vol.Optional(CONF_THRESHOLD, default=default_threshold): vol.Coerce(float),
         }
     )
-
-
-def _build_feature_more_schema() -> vol.Schema:
-    return vol.Schema(
-        {
-            vol.Required(_NEXT_ACTION, default="add_feature"): selector.SelectSelector(
-                selector.SelectSelectorConfig(
-                    options=[
-                        selector.SelectOptionDict(value="add_feature", label="Add another"),
-                        selector.SelectOptionDict(value="finish_features", label="Done"),
-                    ],
-                    mode=selector.SelectSelectorMode.DROPDOWN,
-                )
-            ),
-        }
-    )
-
 
 def _pairs_to_feature_payload(
     pairs: list[tuple[str, str]],
@@ -161,24 +140,6 @@ def _pairs_to_feature_payload(
         else:
             state_mappings[feature] = {feature_states[feature].casefold(): 1.0}
     return required_features, feature_states, normalized_feature_types, state_mappings
-
-
-def _build_states_schema(
-    required_features: list[str],
-    default_states: dict[str, str],
-    default_threshold: float,
-) -> vol.Schema:
-    schema: dict[Any, Any] = {
-        vol.Optional(CONF_THRESHOLD, default=default_threshold): vol.Coerce(float),
-    }
-    for feature in required_features:
-        schema[vol.Required(feature, default=default_states.get(feature, ""))] = str
-    return vol.Schema(schema)
-
-
-def _build_preview_schema() -> vol.Schema:
-    return vol.Schema({vol.Required("confirm", default=True): bool})
-
 
 class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for the integration."""
@@ -259,7 +220,7 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
                         pairs.append((feature, state))
                         existing[feature] = len(pairs) - 1
                 self._draft[_DRAFT_FEATURE_PAIRS] = pairs
-                return await self.async_step_feature_more()
+                return await self.async_step_finish_features()
 
             default_feature = ", ".join(feature_values)
             default_state = state
@@ -272,28 +233,6 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
                 "features_help": f"Added {len(pairs)} feature(s). Enter one feature/state pair.",
             },
         )
-
-    async def async_step_feature_more(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        errors: dict[str, str] = {}
-        if user_input is not None:
-            action = str(user_input.get(_NEXT_ACTION, "")).strip()
-            if action == "add_feature":
-                return await self.async_step_add_feature()
-            if action == "finish_features":
-                return await self.async_step_finish_features()
-            errors[_NEXT_ACTION] = "required"
-        return self.async_show_form(
-            step_id="feature_more",
-            data_schema=_build_feature_more_schema(),
-            errors=errors,
-            description_placeholders={
-                "feature_count": str(len(self._draft.get(_DRAFT_FEATURE_PAIRS, []))),
-            },
-        )
-
-    async def async_step_add_feature(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        del user_input
-        return await self.async_step_features()
 
     async def async_step_finish_features(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         del user_input
@@ -333,83 +272,9 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
             },
         )
 
-    async def async_step_states(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        errors: dict[str, str] = {}
-        required_features = list(self._draft.get(CONF_REQUIRED_FEATURES, []))
-
-        if user_input is not None:
-            feature_states: dict[str, str] = {}
-            for feature in required_features:
-                raw_value = user_input.get(feature)
-                if raw_value is None or str(raw_value).strip() == "":
-                    errors[feature] = "required"
-                    continue
-                feature_states[feature] = str(raw_value)
-            if not errors:
-                self._draft[CONF_FEATURE_STATES] = {feature: feature_states[feature] for feature in required_features}
-                feature_types = infer_feature_types_from_states(self._draft[CONF_FEATURE_STATES])
-                self._draft[CONF_FEATURE_TYPES] = {
-                    feature: feature_types.get(feature, FEATURE_TYPE_NUMERIC)
-                    for feature in required_features
-                }
-
-                inferred_state_mappings = infer_state_mappings_from_states(self._draft[CONF_FEATURE_STATES])
-                final_state_mappings: dict[str, dict[str, float]] = {}
-                for feature in required_features:
-                    if self._draft[CONF_FEATURE_TYPES][feature] != FEATURE_TYPE_CATEGORICAL:
-                        continue
-                    if feature in inferred_state_mappings:
-                        final_state_mappings[feature] = inferred_state_mappings[feature]
-                    else:
-                        final_state_mappings[feature] = {
-                            self._draft[CONF_FEATURE_STATES][feature].casefold(): 1.0
-                        }
-                self._draft[CONF_STATE_MAPPINGS] = final_state_mappings
-                self._draft[CONF_THRESHOLD] = float(user_input.get(CONF_THRESHOLD, DEFAULT_THRESHOLD))
-                return await self.async_step_preview()
-
-        default_states = dict(self._draft.get(CONF_FEATURE_STATES, {}))
-        default_threshold = float(self._draft.get(CONF_THRESHOLD, DEFAULT_THRESHOLD))
-        return self.async_show_form(
-            step_id="states",
-            data_schema=_build_states_schema(required_features, default_states, default_threshold),
-            errors=errors,
-            description_placeholders={"states_help": ", ".join(required_features)},
-        )
-
-    async def async_step_preview(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        if user_input is not None and bool(user_input.get("confirm")):
-            return self.async_create_entry(
-                title=str(self._draft[CONF_NAME]),
-                data={
-                    CONF_NAME: self._draft[CONF_NAME],
-                    CONF_GOAL: self._draft[CONF_GOAL],
-                    CONF_REQUIRED_FEATURES: self._draft[CONF_REQUIRED_FEATURES],
-                    CONF_FEATURE_TYPES: self._draft[CONF_FEATURE_TYPES],
-                    CONF_FEATURE_STATES: self._draft[CONF_FEATURE_STATES],
-                    CONF_STATE_MAPPINGS: self._draft[CONF_STATE_MAPPINGS],
-                    CONF_THRESHOLD: self._draft[CONF_THRESHOLD],
-                    CONF_ML_DB_PATH: self._draft[CONF_ML_DB_PATH],
-                    CONF_ML_ARTIFACT_VIEW: self._draft[CONF_ML_ARTIFACT_VIEW],
-                    CONF_ML_FEATURE_SOURCE: self._draft[CONF_ML_FEATURE_SOURCE],
-                    CONF_ML_FEATURE_VIEW: self._draft[CONF_ML_FEATURE_VIEW],
-                },
-            )
-
-        return self.async_show_form(
-            step_id="preview",
-            data_schema=_build_preview_schema(),
-            description_placeholders={
-                "name": str(self._draft.get(CONF_NAME, "")),
-                "goal": str(self._draft.get(CONF_GOAL, "")),
-                "required_features": ", ".join(self._draft.get(CONF_REQUIRED_FEATURES, [])),
-            },
-        )
-
     @staticmethod
     def async_get_options_flow(config_entry):
         return ClrOptionsFlow(config_entry)
-
 
 class ClrOptionsFlow(config_entries.OptionsFlow):
     """Handle options flow for post-setup configuration changes."""
@@ -625,7 +490,7 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
                         pairs.append((feature, state))
                         existing[feature] = len(pairs) - 1
                 self._draft[_DRAFT_FEATURE_PAIRS] = pairs
-                return await self.async_step_feature_more()
+                return await self.async_step_finish_features()
 
             default_feature = ", ".join(feature_values)
             default_state = state
@@ -638,28 +503,6 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
                 "features_help": f"Configured {len(pairs)} feature(s). Enter one feature/state pair."
             },
         )
-
-    async def async_step_feature_more(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        errors: dict[str, str] = {}
-        if user_input is not None:
-            action = str(user_input.get(_NEXT_ACTION, "")).strip()
-            if action == "add_feature":
-                return await self.async_step_add_feature()
-            if action == "finish_features":
-                return await self.async_step_finish_features()
-            errors[_NEXT_ACTION] = "required"
-        return self.async_show_form(
-            step_id="feature_more",
-            data_schema=_build_feature_more_schema(),
-            errors=errors,
-            description_placeholders={
-                "feature_count": str(len(self._draft.get(_DRAFT_FEATURE_PAIRS, []))),
-            },
-        )
-
-    async def async_step_add_feature(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        del user_input
-        return await self.async_step_features()
 
     async def async_step_finish_features(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         del user_input
@@ -684,78 +527,6 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
                     CONF_THRESHOLD: float(self._draft.get(CONF_THRESHOLD, DEFAULT_THRESHOLD)),
                 }
             ),
-        )
-
-    async def async_step_states(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        errors: dict[str, str] = {}
-        required_features = list(
-            self._draft.get(
-                CONF_REQUIRED_FEATURES,
-                self._config_entry.options.get(
-                    CONF_REQUIRED_FEATURES,
-                    self._config_entry.data.get(CONF_REQUIRED_FEATURES, []),
-                ),
-            )
-        )
-
-        if user_input is not None:
-            feature_states: dict[str, str] = {}
-            for feature in required_features:
-                raw_value = user_input.get(feature)
-                if raw_value is None or str(raw_value).strip() == "":
-                    errors[feature] = "required"
-                    continue
-                feature_states[feature] = str(raw_value)
-
-            if not errors:
-                feature_types = infer_feature_types_from_states(feature_states)
-                normalized_feature_types = {
-                    feature: feature_types.get(feature, FEATURE_TYPE_NUMERIC)
-                    for feature in required_features
-                }
-
-                inferred_state_mappings = infer_state_mappings_from_states(feature_states)
-                state_mappings: dict[str, dict[str, float]] = {}
-                for feature in required_features:
-                    if normalized_feature_types[feature] != FEATURE_TYPE_CATEGORICAL:
-                        continue
-                    if feature in inferred_state_mappings:
-                        state_mappings[feature] = inferred_state_mappings[feature]
-                    else:
-                        state_mappings[feature] = {feature_states[feature].casefold(): 1.0}
-
-                return self.async_create_entry(
-                    title="",
-                    data=self._merged_options(
-                        {
-                            CONF_REQUIRED_FEATURES: required_features,
-                            CONF_FEATURE_STATES: feature_states,
-                            CONF_FEATURE_TYPES: normalized_feature_types,
-                            CONF_STATE_MAPPINGS: state_mappings,
-                            CONF_THRESHOLD: float(user_input.get(CONF_THRESHOLD, DEFAULT_THRESHOLD)),
-                        }
-                    ),
-                )
-
-        existing_states = self._config_entry.options.get(
-            CONF_FEATURE_STATES,
-            self._config_entry.data.get(CONF_FEATURE_STATES, {}),
-        )
-        default_states = {
-            feature: str(existing_states.get(feature, ""))
-            for feature in required_features
-        }
-        default_threshold = float(
-            self._config_entry.options.get(
-                CONF_THRESHOLD,
-                self._config_entry.data.get(CONF_THRESHOLD, DEFAULT_THRESHOLD),
-            )
-        )
-        return self.async_show_form(
-            step_id="states",
-            data_schema=_build_states_schema(required_features, default_states, default_threshold),
-            errors=errors,
-            description_placeholders={"states_help": ", ".join(required_features)},
         )
 
     async def async_step_diagnostics(self, user_input: dict[str, Any] | None = None) -> FlowResult:

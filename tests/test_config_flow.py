@@ -17,7 +17,7 @@ def _new_flow() -> CalibratedLogisticRegressionConfigFlow:
     return flow
 
 
-def test_wizard_happy_path_creates_entry_from_looped_feature_state_pairs() -> None:
+def test_wizard_creates_entry_after_single_feature() -> None:
     flow = _new_flow()
 
     user_result = asyncio.run(
@@ -32,7 +32,7 @@ def test_wizard_happy_path_creates_entry_from_looped_feature_state_pairs() -> No
     assert user_result["type"] == "form"
     assert user_result["step_id"] == "features"
 
-    first_pair = asyncio.run(
+    created = asyncio.run(
         flow.async_step_features(
             {
                 "feature": "sensor.a",
@@ -41,35 +41,10 @@ def test_wizard_happy_path_creates_entry_from_looped_feature_state_pairs() -> No
             }
         )
     )
-    assert first_pair["type"] == "form"
-    assert first_pair["step_id"] == "feature_more"
-    feature_more_keys = [str(k.schema) for k in first_pair["data_schema"].schema]
-    assert "next_action" in feature_more_keys
-
-    add_step = asyncio.run(flow.async_step_feature_more({"next_action": "add_feature"}))
-    assert add_step["type"] == "form"
-    assert add_step["step_id"] == "features"
-
-    second_pair = asyncio.run(
-        flow.async_step_features(
-            {
-                "feature": "binary_sensor.window",
-                "state": "on",
-                "threshold": 65.0,
-            }
-        )
-    )
-    assert second_pair["type"] == "form"
-    assert second_pair["step_id"] == "feature_more"
-
-    created = asyncio.run(flow.async_step_feature_more({"next_action": "finish_features"}))
     assert created["type"] == "create_entry"
     assert created["title"] == "Kitchen MindML"
-    assert created["data"]["required_features"] == ["sensor.a", "binary_sensor.window"]
-    assert created["data"]["feature_states"] == {
-        "sensor.a": "22.5",
-        "binary_sensor.window": "on",
-    }
+    assert created["data"]["required_features"] == ["sensor.a"]
+    assert created["data"]["feature_states"] == {"sensor.a": "22.5"}
     assert created["data"]["threshold"] == 65.0
 
 
@@ -147,7 +122,7 @@ def test_options_flow_decision_updates_threshold() -> None:
     assert result["data"]["threshold"] == 72.5
 
 
-def test_options_flow_features_updates_configuration_via_loop() -> None:
+def test_options_flow_features_updates_configuration() -> None:
     entry = MagicMock()
     entry.options = {}
     entry.data = {
@@ -158,7 +133,7 @@ def test_options_flow_features_updates_configuration_via_loop() -> None:
     }
 
     flow = ClrOptionsFlow(entry)
-    first_pair = asyncio.run(
+    updated = asyncio.run(
         flow.async_step_features(
             {
                 "feature": "sensor.a",
@@ -167,27 +142,10 @@ def test_options_flow_features_updates_configuration_via_loop() -> None:
             }
         )
     )
-    assert first_pair["type"] == "form"
-    assert first_pair["step_id"] == "feature_more"
-
-    asyncio.run(flow.async_step_feature_more({"next_action": "add_feature"}))
-    asyncio.run(
-        flow.async_step_features(
-            {
-                "feature": "binary_sensor.window",
-                "state": "off",
-                "threshold": 65.0,
-            }
-        )
-    )
-    updated = asyncio.run(flow.async_step_feature_more({"next_action": "finish_features"}))
 
     assert updated["type"] == "create_entry"
-    assert updated["data"]["required_features"] == ["sensor.a", "binary_sensor.window"]
-    assert updated["data"]["feature_states"] == {
-        "sensor.a": "23.0",
-        "binary_sensor.window": "off",
-    }
+    assert updated["data"]["required_features"] == ["sensor.a"]
+    assert updated["data"]["feature_states"] == {"sensor.a": "23.0"}
     assert updated["data"]["threshold"] == 65.0
 
 
@@ -254,7 +212,7 @@ def test_options_flow_features_preserve_existing_ml_settings() -> None:
     entry.data = {}
 
     flow = ClrOptionsFlow(entry)
-    asyncio.run(
+    updated = asyncio.run(
         flow.async_step_features(
             {
                 "feature": "sensor.a",
@@ -263,7 +221,6 @@ def test_options_flow_features_preserve_existing_ml_settings() -> None:
             }
         )
     )
-    updated = asyncio.run(flow.async_step_feature_more({"next_action": "finish_features"}))
 
     assert updated["type"] == "create_entry"
     assert updated["data"]["required_features"] == ["sensor.a"]
@@ -319,7 +276,7 @@ def test_wizard_features_step_accepts_list_payload_and_creates_entry() -> None:
         )
     )
 
-    first_pair = asyncio.run(
+    created = asyncio.run(
         flow.async_step_features(
             {
                 "feature": ["sensor.a", "binary_sensor.window"],
@@ -328,10 +285,6 @@ def test_wizard_features_step_accepts_list_payload_and_creates_entry() -> None:
             }
         )
     )
-    assert first_pair["type"] == "form"
-    assert first_pair["step_id"] == "feature_more"
-
-    created = asyncio.run(flow.async_step_feature_more({"next_action": "finish_features"}))
     assert created["type"] == "create_entry"
     assert created["data"]["required_features"] == ["sensor.a", "binary_sensor.window"]
     assert created["data"]["feature_states"] == {
@@ -356,7 +309,7 @@ def test_options_flow_features_accepts_list_payload_and_preserves_ml_settings() 
     entry.data = {}
 
     flow = ClrOptionsFlow(entry)
-    asyncio.run(
+    updated = asyncio.run(
         flow.async_step_features(
             {
                 "feature": ["sensor.a", "binary_sensor.window"],
@@ -365,7 +318,6 @@ def test_options_flow_features_accepts_list_payload_and_preserves_ml_settings() 
             }
         )
     )
-    updated = asyncio.run(flow.async_step_feature_more({"next_action": "finish_features"}))
 
     assert updated["type"] == "create_entry"
     assert updated["data"]["required_features"] == ["sensor.a", "binary_sensor.window"]
@@ -391,26 +343,15 @@ def test_wizard_list_payload_updates_existing_feature_without_duplicates() -> No
         )
     )
 
-    asyncio.run(
+    created = asyncio.run(
         flow.async_step_features(
             {
-                "feature": "sensor.a",
-                "state": "22.5",
-                "threshold": 60.0,
-            }
-        )
-    )
-    asyncio.run(flow.async_step_feature_more({"next_action": "add_feature"}))
-    asyncio.run(
-        flow.async_step_features(
-            {
-                "feature": ["sensor.a", "binary_sensor.window"],
+                "feature": ["sensor.a", "sensor.a", "binary_sensor.window"],
                 "state": "off",
                 "threshold": 60.0,
             }
         )
     )
-    created = asyncio.run(flow.async_step_feature_more({"next_action": "finish_features"}))
 
     assert created["type"] == "create_entry"
     assert created["data"]["required_features"] == ["sensor.a", "binary_sensor.window"]
@@ -431,7 +372,7 @@ def test_wizard_finish_features_persists_entry_without_preview_step() -> None:
             }
         )
     )
-    asyncio.run(
+    result = asyncio.run(
         flow.async_step_features(
             {
                 "feature": "sensor.a",
@@ -440,7 +381,6 @@ def test_wizard_finish_features_persists_entry_without_preview_step() -> None:
             }
         )
     )
-    result = asyncio.run(flow.async_step_feature_more({"next_action": "finish_features"}))
 
     assert result["type"] == "create_entry"
     assert result["title"] == "Hallway MindML"
@@ -472,7 +412,6 @@ def test_wizard_logs_feature_normalization_and_finish_summary(caplog) -> None:
             }
         )
     )
-    asyncio.run(flow.async_step_feature_more({"next_action": "finish_features"}))
 
     messages = [record.getMessage() for record in caplog.records]
     assert any("normalized_features" in message for message in messages)

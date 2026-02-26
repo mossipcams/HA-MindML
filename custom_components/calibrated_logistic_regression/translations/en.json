@@ -21,27 +21,6 @@
           "state": "State",
           "threshold": "Decision threshold (%)"
         }
-      },
-      "feature_more": {
-        "title": "Feature Pairs",
-        "description": "You have added {feature_count} feature/state pair(s). Add another pair or finish.",
-        "data": {
-          "next_action": "Next action"
-        }
-      },
-      "states": {
-        "title": "Feature States",
-        "description": "Provide current states for each selected entity. Selected features: {states_help}",
-        "data": {
-          "threshold": "Decision threshold (%)"
-        }
-      },
-      "preview": {
-        "title": "Preview",
-        "description": "Review and confirm this integration setup.",
-        "data": {
-          "confirm": "Confirm setup"
-        }
       }
     },
     "error": {
@@ -90,20 +69,6 @@
         "data": {
           "feature": "Feature",
           "state": "State",
-          "threshold": "Decision threshold (%)"
-        }
-      },
-      "feature_more": {
-        "title": "Feature Pairs",
-        "description": "You have configured {feature_count} feature/state pair(s). Add another pair or finish.",
-        "data": {
-          "next_action": "Next action"
-        }
-      },
-      "states": {
-        "title": "Feature States",
-        "description": "Provide current states for each selected feature. Selected features: {states_help}",
-        "data": {
           "threshold": "Decision threshold (%)"
         }
       },
