@@ -25,10 +25,12 @@ from .const import (
     DEFAULT_ML_FEATURE_SOURCE,
     DEFAULT_ML_FEATURE_VIEW,
     DEFAULT_THRESHOLD,
+    DOMAIN,
 )
 from .feature_provider import RealtimeHistoryFeatureProvider, SqliteSnapshotFeatureProvider
 from .lightgbm_inference import LightGBMModelSpec, run_lightgbm_inference
 from .model_provider import ModelProviderResult, SqliteLightGBMModelProvider
+from .paths import resolve_ml_db_path
 
 
 async def async_setup_entry(
@@ -50,12 +52,13 @@ class CalibratedLogisticRegressionSensor(SensorEntity):
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         """Initialize the sensor."""
         self.hass = hass
+        self._entry_id = entry.entry_id
 
         config = dict(entry.data)
         config.update(entry.options)
 
         self._name = str(config.get(CONF_NAME, entry.title or "MindML Probability"))
-        self._ml_db_path = str(config.get(CONF_ML_DB_PATH, "")).strip()
+        self._ml_db_path = resolve_ml_db_path(self.hass, config.get(CONF_ML_DB_PATH, ""))
         self._ml_artifact_view = str(
             config.get(CONF_ML_ARTIFACT_VIEW, DEFAULT_ML_ARTIFACT_VIEW)
         ).strip() or DEFAULT_ML_ARTIFACT_VIEW
@@ -214,6 +217,7 @@ class CalibratedLogisticRegressionSensor(SensorEntity):
             self._unavailable_reason = "feature_source_error"
             self._is_above_threshold = None
             self._decision = None
+            self._store_runtime_diagnostics()
             return
 
         self._feature_values = dict(feature_vector.feature_values)
@@ -235,3 +239,20 @@ class CalibratedLogisticRegressionSensor(SensorEntity):
         self._unavailable_reason = result.unavailable_reason
         self._is_above_threshold = result.is_above_threshold
         self._decision = result.decision
+        self._store_runtime_diagnostics()
+
+    def _store_runtime_diagnostics(self) -> None:
+        """Persist lightweight runtime status for diagnostics endpoint."""
+        if not isinstance(getattr(self.hass, "data", None), dict):
+            self.hass.data = {}
+        domain_data = self.hass.data.setdefault(DOMAIN, {})
+        entry_data = domain_data.setdefault(self._entry_id, {})
+        entry_data["runtime"] = {
+            "available": self._available,
+            "feature_source": self._ml_feature_source,
+            "missing_features": list(self._missing_features),
+            "unavailable_reason": self._unavailable_reason,
+            "feature_provider_error": self._feature_provider_error,
+            "last_computed_at": self._last_computed_at,
+            "model_source": self._model_source,
+        }

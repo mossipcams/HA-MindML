@@ -37,6 +37,7 @@ from .feature_mapping import (
     parse_required_features,
     parse_state_mappings,
 )
+from .paths import resolve_ml_db_path
 
 
 def _build_user_schema() -> vol.Schema:
@@ -59,7 +60,7 @@ def _build_user_schema() -> vol.Schema:
                     mode=selector.SelectSelectorMode.DROPDOWN,
                 )
             ),
-            vol.Required(CONF_ML_DB_PATH): str,
+            vol.Optional(CONF_ML_DB_PATH, default=""): str,
             vol.Optional(CONF_ML_ARTIFACT_VIEW, default=DEFAULT_ML_ARTIFACT_VIEW): str,
             vol.Optional(
                 CONF_ML_FEATURE_SOURCE,
@@ -84,19 +85,12 @@ def _build_user_schema() -> vol.Schema:
     )
 
 
-def _build_features_schema(default_features: list[str]) -> vol.Schema:
+def _build_features_schema(default_features: list[str], default_mappings: str) -> vol.Schema:
     return vol.Schema(
         {
             vol.Required(CONF_REQUIRED_FEATURES, default=default_features): selector.EntitySelector(
                 selector.EntitySelectorConfig(multiple=True)
             ),
-        }
-    )
-
-
-def _build_mappings_schema(default_mappings: str) -> vol.Schema:
-    return vol.Schema(
-        {
             vol.Optional(CONF_STATE_MAPPINGS, default=default_mappings): str,
         }
     )
@@ -137,8 +131,6 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
                 errors[CONF_NAME] = "required"
             if not goal:
                 errors[CONF_GOAL] = "required"
-            if not ml_db_path:
-                errors[CONF_ML_DB_PATH] = "required"
 
             if not errors:
                 for entry in self._async_current_entries():
@@ -146,7 +138,7 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
                         return self.async_abort(reason="already_configured")
                 self._draft[CONF_NAME] = name
                 self._draft[CONF_GOAL] = goal
-                self._draft[CONF_ML_DB_PATH] = ml_db_path
+                self._draft[CONF_ML_DB_PATH] = resolve_ml_db_path(self.hass, ml_db_path)
                 self._draft[CONF_ML_ARTIFACT_VIEW] = str(
                     user_input.get(CONF_ML_ARTIFACT_VIEW, DEFAULT_ML_ARTIFACT_VIEW)
                 ).strip() or DEFAULT_ML_ARTIFACT_VIEW
@@ -171,19 +163,24 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
         errors: dict[str, str] = {}
         if user_input is not None:
             required_features = parse_required_features(user_input[CONF_REQUIRED_FEATURES])
+            state_mappings = parse_state_mappings(str(user_input.get(CONF_STATE_MAPPINGS, "{}")))
             if not required_features:
                 errors[CONF_REQUIRED_FEATURES] = "required"
+            if state_mappings is None:
+                errors[CONF_STATE_MAPPINGS] = "invalid_state_mappings"
             if not errors:
                 self._draft[CONF_REQUIRED_FEATURES] = required_features
+                self._draft[CONF_STATE_MAPPINGS] = state_mappings
                 return await self.async_step_states()
 
         default_features = list(self._draft.get(CONF_REQUIRED_FEATURES, []))
+        default_mappings = json.dumps(self._draft.get(CONF_STATE_MAPPINGS, {}))
         return self.async_show_form(
             step_id="features",
-            data_schema=_build_features_schema(default_features),
+            data_schema=_build_features_schema(default_features, default_mappings),
             errors=errors,
             description_placeholders={
-                "features_help": "Pick entities like sensor.temperature or binary_sensor.door.",
+                "features_help": "Pick entities and optionally provide mapping JSON for categorical states.",
             },
         )
 
@@ -207,12 +204,19 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
                     for feature in required_features
                 }
 
+                explicit_state_mappings = {
+                    str(entity_id): {str(state): float(value) for state, value in states.items()}
+                    for entity_id, states in dict(self._draft.get(CONF_STATE_MAPPINGS, {})).items()
+                    if isinstance(states, dict)
+                }
                 inferred_state_mappings = infer_state_mappings_from_states(self._draft[CONF_FEATURE_STATES])
                 final_state_mappings: dict[str, dict[str, float]] = {}
                 for feature in required_features:
                     if self._draft[CONF_FEATURE_TYPES][feature] != FEATURE_TYPE_CATEGORICAL:
                         continue
-                    if feature in inferred_state_mappings:
+                    if feature in explicit_state_mappings:
+                        final_state_mappings[feature] = explicit_state_mappings[feature]
+                    elif feature in inferred_state_mappings:
                         final_state_mappings[feature] = inferred_state_mappings[feature]
                     else:
                         final_state_mappings[feature] = {
@@ -280,7 +284,6 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
                 "feature_source",
                 "decision",
                 "features",
-                "mappings",
                 "diagnostics",
             ],
         )
@@ -290,7 +293,10 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
             return self.async_create_entry(
                 title="",
                 data={
-                    CONF_ML_DB_PATH: str(user_input.get(CONF_ML_DB_PATH, "")).strip(),
+                    CONF_ML_DB_PATH: resolve_ml_db_path(
+                        self.hass,
+                        str(user_input.get(CONF_ML_DB_PATH, "")).strip(),
+                    ),
                     CONF_ML_ARTIFACT_VIEW: str(
                         user_input.get(CONF_ML_ARTIFACT_VIEW, DEFAULT_ML_ARTIFACT_VIEW)
                     ).strip()
@@ -300,7 +306,7 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
 
         default_db_path = self._config_entry.options.get(
             CONF_ML_DB_PATH,
-            self._config_entry.data.get(CONF_ML_DB_PATH, ""),
+            resolve_ml_db_path(self.hass, self._config_entry.data.get(CONF_ML_DB_PATH, "")),
         )
         default_view = self._config_entry.options.get(
             CONF_ML_ARTIFACT_VIEW,
@@ -386,39 +392,35 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
         errors: dict[str, str] = {}
         if user_input is not None:
             required_features = parse_required_features(user_input[CONF_REQUIRED_FEATURES])
+            state_mappings = parse_state_mappings(str(user_input.get(CONF_STATE_MAPPINGS, "{}")))
             if not required_features:
                 errors[CONF_REQUIRED_FEATURES] = "required"
-            else:
-                return self.async_create_entry(title="", data={CONF_REQUIRED_FEATURES: required_features})
+            if state_mappings is None:
+                errors[CONF_STATE_MAPPINGS] = "invalid_state_mappings"
+            if not errors:
+                return self.async_create_entry(
+                    title="",
+                    data={
+                        CONF_REQUIRED_FEATURES: required_features,
+                        CONF_STATE_MAPPINGS: state_mappings,
+                    },
+                )
 
-        defaults = self._config_entry.options.get(
+        default_features = self._config_entry.options.get(
             CONF_REQUIRED_FEATURES,
             self._config_entry.data.get(CONF_REQUIRED_FEATURES, []),
         )
-        return self.async_show_form(
-            step_id="features",
-            data_schema=_build_features_schema(defaults),
-            errors=errors,
-            description_placeholders={"features_help": "Pick entities to include as model features."},
-        )
-
-    async def async_step_mappings(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        errors: dict[str, str] = {}
-        if user_input is not None:
-            state_mappings = parse_state_mappings(str(user_input.get(CONF_STATE_MAPPINGS, "{}")))
-            if state_mappings is None:
-                errors[CONF_STATE_MAPPINGS] = "invalid_state_mappings"
-            else:
-                return self.async_create_entry(title="", data={CONF_STATE_MAPPINGS: state_mappings})
-
-        defaults = self._config_entry.options.get(
+        default_state_mappings = self._config_entry.options.get(
             CONF_STATE_MAPPINGS,
             self._config_entry.data.get(CONF_STATE_MAPPINGS, {}),
         )
         return self.async_show_form(
-            step_id="mappings",
-            data_schema=_build_mappings_schema(json.dumps(defaults)),
+            step_id="features",
+            data_schema=_build_features_schema(default_features, json.dumps(default_state_mappings)),
             errors=errors,
+            description_placeholders={
+                "features_help": "Pick entities and optionally set mapping JSON for categorical states."
+            },
         )
 
     async def async_step_diagnostics(self, user_input: dict[str, Any] | None = None) -> FlowResult:

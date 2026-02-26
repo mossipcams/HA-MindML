@@ -15,9 +15,10 @@
       },
       "features": {
         "title": "Select Features",
-        "description": "Choose entities used as runtime features. {features_help}",
+        "description": "Choose entities used as runtime features and optional state mappings. {features_help}",
         "data": {
-          "required_features": "Required features"
+          "required_features": "Required features",
+          "state_mappings": "State mappings JSON"
         }
       },
       "states": {
@@ -52,7 +53,6 @@
           "feature_source": "Feature Source",
           "decision": "Decision",
           "features": "Features",
-          "mappings": "Mappings",
           "diagnostics": "Diagnostics"
         }
       },
@@ -78,13 +78,9 @@
       },
       "features": {
         "title": "Features",
+        "description": "Manage feature entities and optional categorical state mappings.",
         "data": {
-          "required_features": "Required features"
-        }
-      },
-      "mappings": {
-        "title": "Mappings",
-        "data": {
+          "required_features": "Required features",
           "state_mappings": "State mappings JSON"
         }
       },

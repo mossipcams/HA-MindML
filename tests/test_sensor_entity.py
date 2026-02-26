@@ -87,8 +87,11 @@ def test_sensor_updates_probability_attributes(monkeypatch) -> None:
     }.get(entity_id)
 
     class _Provider:
+        last_kwargs: dict[str, object] = {}
+
         def __init__(self, **kwargs):
             self.kwargs = kwargs
+            _Provider.last_kwargs = dict(kwargs)
 
         def load(self):
             from custom_components.calibrated_logistic_regression.lightgbm_inference import LightGBMModelSpec
@@ -116,3 +119,39 @@ def test_sensor_updates_probability_attributes(monkeypatch) -> None:
     assert attrs["missing_features"] == []
     assert attrs["feature_values"]["sensor.a"] == 2.0
     assert attrs["decision"] in {"positive", "negative"}
+
+
+def test_sensor_resolves_default_ml_db_path_when_missing(monkeypatch) -> None:
+    hass = MagicMock()
+    hass.states.get.return_value = State("sensor.a", "2")
+    hass.config.path.return_value = "/config/ha_ml_data_layer.db"
+    entry = _build_entry()
+    entry.data.pop("ml_db_path")
+
+    class _Provider:
+        last_kwargs: dict[str, object] = {}
+
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+            _Provider.last_kwargs = dict(kwargs)
+
+        def load(self):
+            from custom_components.calibrated_logistic_regression.lightgbm_inference import LightGBMModelSpec
+            from custom_components.calibrated_logistic_regression.model_provider import ModelProviderResult
+
+            return ModelProviderResult(
+                model=LightGBMModelSpec(feature_names=["sensor.a"], model_payload={"intercept": 0.0, "weights": [0.0]}),
+                source="manual",
+                artifact_error="missing artifact",
+                artifact_meta={},
+            )
+
+    monkeypatch.setattr(
+        "custom_components.calibrated_logistic_regression.sensor.SqliteLightGBMModelProvider",
+        _Provider,
+    )
+
+    sensor = CalibratedLogisticRegressionSensor(hass, entry)
+
+    assert _Provider.last_kwargs["db_path"] == "/config/ha_ml_data_layer.db"
+    assert sensor.extra_state_attributes["model_runtime"] == "lightgbm"
