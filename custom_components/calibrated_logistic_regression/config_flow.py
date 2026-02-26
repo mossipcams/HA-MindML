@@ -361,6 +361,39 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
         self._config_entry = config_entry
         self._draft: dict[str, Any] = {}
 
+    def _existing_value(self, key: str, default: Any) -> Any:
+        if key in self._config_entry.options:
+            return self._config_entry.options[key]
+        return self._config_entry.data.get(key, default)
+
+    def _merged_options(self, updates: dict[str, Any]) -> dict[str, Any]:
+        merged = {
+            CONF_REQUIRED_FEATURES: list(self._existing_value(CONF_REQUIRED_FEATURES, [])),
+            CONF_FEATURE_STATES: dict(self._existing_value(CONF_FEATURE_STATES, {})),
+            CONF_FEATURE_TYPES: dict(self._existing_value(CONF_FEATURE_TYPES, {})),
+            CONF_STATE_MAPPINGS: dict(self._existing_value(CONF_STATE_MAPPINGS, {})),
+            CONF_THRESHOLD: float(self._existing_value(CONF_THRESHOLD, DEFAULT_THRESHOLD)),
+            CONF_ML_DB_PATH: resolve_ml_db_path(
+                getattr(self, "hass", None),
+                str(self._existing_value(CONF_ML_DB_PATH, "")).strip(),
+            ),
+            CONF_ML_ARTIFACT_VIEW: str(
+                self._existing_value(CONF_ML_ARTIFACT_VIEW, DEFAULT_ML_ARTIFACT_VIEW)
+            ).strip()
+            or DEFAULT_ML_ARTIFACT_VIEW,
+            CONF_ML_FEATURE_SOURCE: str(
+                self._existing_value(CONF_ML_FEATURE_SOURCE, DEFAULT_ML_FEATURE_SOURCE)
+            ).strip()
+            or DEFAULT_ML_FEATURE_SOURCE,
+            CONF_ML_FEATURE_VIEW: str(
+                self._existing_value(CONF_ML_FEATURE_VIEW, DEFAULT_ML_FEATURE_VIEW)
+            ).strip()
+            or DEFAULT_ML_FEATURE_VIEW,
+        }
+        merged.update(dict(self._config_entry.options))
+        merged.update(updates)
+        return merged
+
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         del user_input
         return self.async_show_menu(
@@ -378,21 +411,26 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(
                 title="",
-                data={
-                    CONF_ML_DB_PATH: resolve_ml_db_path(
-                        self.hass,
-                        str(user_input.get(CONF_ML_DB_PATH, "")).strip(),
-                    ),
-                    CONF_ML_ARTIFACT_VIEW: str(
-                        user_input.get(CONF_ML_ARTIFACT_VIEW, DEFAULT_ML_ARTIFACT_VIEW)
-                    ).strip()
-                    or DEFAULT_ML_ARTIFACT_VIEW,
-                },
+                data=self._merged_options(
+                    {
+                        CONF_ML_DB_PATH: resolve_ml_db_path(
+                            getattr(self, "hass", None),
+                            str(user_input.get(CONF_ML_DB_PATH, "")).strip(),
+                        ),
+                        CONF_ML_ARTIFACT_VIEW: str(
+                            user_input.get(CONF_ML_ARTIFACT_VIEW, DEFAULT_ML_ARTIFACT_VIEW)
+                        ).strip()
+                        or DEFAULT_ML_ARTIFACT_VIEW,
+                    }
+                ),
             )
 
         default_db_path = self._config_entry.options.get(
             CONF_ML_DB_PATH,
-            resolve_ml_db_path(self.hass, self._config_entry.data.get(CONF_ML_DB_PATH, "")),
+            resolve_ml_db_path(
+                getattr(self, "hass", None),
+                self._config_entry.data.get(CONF_ML_DB_PATH, ""),
+            ),
         )
         default_view = self._config_entry.options.get(
             CONF_ML_ARTIFACT_VIEW,
@@ -412,16 +450,18 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(
                 title="",
-                data={
-                    CONF_ML_FEATURE_SOURCE: str(
-                        user_input.get(CONF_ML_FEATURE_SOURCE, DEFAULT_ML_FEATURE_SOURCE)
-                    ).strip()
-                    or DEFAULT_ML_FEATURE_SOURCE,
-                    CONF_ML_FEATURE_VIEW: str(
-                        user_input.get(CONF_ML_FEATURE_VIEW, DEFAULT_ML_FEATURE_VIEW)
-                    ).strip()
-                    or DEFAULT_ML_FEATURE_VIEW,
-                },
+                data=self._merged_options(
+                    {
+                        CONF_ML_FEATURE_SOURCE: str(
+                            user_input.get(CONF_ML_FEATURE_SOURCE, DEFAULT_ML_FEATURE_SOURCE)
+                        ).strip()
+                        or DEFAULT_ML_FEATURE_SOURCE,
+                        CONF_ML_FEATURE_VIEW: str(
+                            user_input.get(CONF_ML_FEATURE_VIEW, DEFAULT_ML_FEATURE_VIEW)
+                        ).strip()
+                        or DEFAULT_ML_FEATURE_VIEW,
+                    }
+                ),
             )
 
         default_feature_source = self._config_entry.options.get(
@@ -462,7 +502,7 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(
                 title="",
-                data={CONF_THRESHOLD: float(user_input[CONF_THRESHOLD])},
+                data=self._merged_options({CONF_THRESHOLD: float(user_input[CONF_THRESHOLD])}),
             )
 
         default_threshold = self._config_entry.options.get(
@@ -565,13 +605,15 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
         required_features, feature_states, feature_types, state_mappings = _pairs_to_feature_payload(pairs)
         return self.async_create_entry(
             title="",
-            data={
-                CONF_REQUIRED_FEATURES: required_features,
-                CONF_FEATURE_STATES: feature_states,
-                CONF_FEATURE_TYPES: feature_types,
-                CONF_STATE_MAPPINGS: state_mappings,
-                CONF_THRESHOLD: float(self._draft.get(CONF_THRESHOLD, DEFAULT_THRESHOLD)),
-            },
+            data=self._merged_options(
+                {
+                    CONF_REQUIRED_FEATURES: required_features,
+                    CONF_FEATURE_STATES: feature_states,
+                    CONF_FEATURE_TYPES: feature_types,
+                    CONF_STATE_MAPPINGS: state_mappings,
+                    CONF_THRESHOLD: float(self._draft.get(CONF_THRESHOLD, DEFAULT_THRESHOLD)),
+                }
+            ),
         )
 
     async def async_step_states(self, user_input: dict[str, Any] | None = None) -> FlowResult:
@@ -614,13 +656,15 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
 
                 return self.async_create_entry(
                     title="",
-                    data={
-                        CONF_REQUIRED_FEATURES: required_features,
-                        CONF_FEATURE_STATES: feature_states,
-                        CONF_FEATURE_TYPES: normalized_feature_types,
-                        CONF_STATE_MAPPINGS: state_mappings,
-                        CONF_THRESHOLD: float(user_input.get(CONF_THRESHOLD, DEFAULT_THRESHOLD)),
-                    },
+                    data=self._merged_options(
+                        {
+                            CONF_REQUIRED_FEATURES: required_features,
+                            CONF_FEATURE_STATES: feature_states,
+                            CONF_FEATURE_TYPES: normalized_feature_types,
+                            CONF_STATE_MAPPINGS: state_mappings,
+                            CONF_THRESHOLD: float(user_input.get(CONF_THRESHOLD, DEFAULT_THRESHOLD)),
+                        }
+                    ),
                 )
 
         existing_states = self._config_entry.options.get(

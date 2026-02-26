@@ -194,6 +194,88 @@ def test_options_flow_features_updates_configuration_via_loop() -> None:
     assert updated["data"]["threshold"] == 65.0
 
 
+def test_options_flow_model_preserves_existing_feature_config() -> None:
+    entry = MagicMock()
+    entry.options = {
+        "required_features": ["sensor.a"],
+        "feature_states": {"sensor.a": "22.5"},
+        "feature_types": {"sensor.a": "numeric"},
+        "state_mappings": {},
+        "threshold": 50.0,
+    }
+    entry.data = {}
+
+    flow = ClrOptionsFlow(entry)
+    updated = asyncio.run(
+        flow.async_step_model(
+            {
+                "ml_db_path": "/tmp/ha_ml_data_layer.db",
+                "ml_artifact_view": "vw_lightgbm_latest_model_artifact",
+            }
+        )
+    )
+
+    assert updated["type"] == "create_entry"
+    assert updated["data"]["required_features"] == ["sensor.a"]
+    assert updated["data"]["feature_states"] == {"sensor.a": "22.5"}
+    assert updated["data"]["ml_artifact_view"] == "vw_lightgbm_latest_model_artifact"
+
+
+def test_options_flow_decision_preserves_existing_feature_config() -> None:
+    entry = MagicMock()
+    entry.options = {
+        "required_features": ["sensor.a"],
+        "feature_states": {"sensor.a": "22.5"},
+        "feature_types": {"sensor.a": "numeric"},
+        "state_mappings": {},
+        "threshold": 50.0,
+    }
+    entry.data = {}
+
+    flow = ClrOptionsFlow(entry)
+    updated = asyncio.run(flow.async_step_decision({"threshold": 72.5}))
+
+    assert updated["type"] == "create_entry"
+    assert updated["data"]["threshold"] == 72.5
+    assert updated["data"]["required_features"] == ["sensor.a"]
+    assert updated["data"]["feature_states"] == {"sensor.a": "22.5"}
+
+
+def test_options_flow_features_preserve_existing_ml_settings() -> None:
+    entry = MagicMock()
+    entry.options = {
+        "required_features": ["sensor.a"],
+        "feature_states": {"sensor.a": "22.5"},
+        "state_mappings": {},
+        "feature_types": {"sensor.a": "numeric"},
+        "threshold": 50.0,
+        "ml_db_path": "/tmp/ha_ml_data_layer.db",
+        "ml_artifact_view": "vw_lightgbm_latest_model_artifact",
+        "ml_feature_source": "ml_snapshot",
+        "ml_feature_view": "vw_latest_feature_snapshot",
+    }
+    entry.data = {}
+
+    flow = ClrOptionsFlow(entry)
+    asyncio.run(
+        flow.async_step_features(
+            {
+                "feature": "sensor.a",
+                "state": "23.0",
+                "threshold": 65.0,
+            }
+        )
+    )
+    updated = asyncio.run(flow.async_step_feature_more({"next_action": "finish_features"}))
+
+    assert updated["type"] == "create_entry"
+    assert updated["data"]["required_features"] == ["sensor.a"]
+    assert updated["data"]["ml_db_path"] == "/tmp/ha_ml_data_layer.db"
+    assert updated["data"]["ml_artifact_view"] == "vw_lightgbm_latest_model_artifact"
+    assert updated["data"]["ml_feature_source"] == "ml_snapshot"
+    assert updated["data"]["ml_feature_view"] == "vw_latest_feature_snapshot"
+
+
 def test_user_step_allows_blank_ml_db_path_and_continues() -> None:
     flow = _new_flow()
 
