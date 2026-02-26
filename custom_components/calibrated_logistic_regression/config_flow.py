@@ -33,9 +33,13 @@ from .feature_mapping import (
     FEATURE_TYPE_NUMERIC,
     infer_feature_types_from_states,
     infer_state_mappings_from_states,
-    parse_required_features,
 )
 from .paths import resolve_ml_db_path
+
+_MAX_FEATURE_ROWS = 20
+_DRAFT_FEATURE_ROWS = "feature_rows"
+_ADD_ROW_FIELD = "add_row"
+_REMOVE_ROW_FIELD = "remove_row"
 
 
 def _build_user_schema() -> vol.Schema:
@@ -84,24 +88,94 @@ def _build_user_schema() -> vol.Schema:
 
 
 def _build_features_schema(
-    default_features: list[str],
-    default_states: dict[str, str] | None = None,
+    default_rows: list[tuple[str, str]],
     default_threshold: float = DEFAULT_THRESHOLD,
 ) -> vol.Schema:
-    states = default_states or {}
-    schema: dict[Any, Any] = {
-        vol.Required(CONF_REQUIRED_FEATURES, default=default_features): selector.EntitySelector(
-            selector.EntitySelectorConfig(multiple=True)
-        ),
-    }
-    for feature in default_features:
-        schema[vol.Optional(_feature_state_field_name(feature), default=states.get(feature, ""))] = str
+    schema: dict[Any, Any] = {}
+    for index, (feature, state) in enumerate(default_rows, start=1):
+        schema[vol.Optional(_feature_row_field_name(index), default=feature)] = selector.EntitySelector(
+            selector.EntitySelectorConfig(multiple=False)
+        )
+        schema[vol.Optional(_state_row_field_name(index), default=state)] = str
+    schema[vol.Optional(_ADD_ROW_FIELD, default=False)] = bool
+    if len(default_rows) > 1:
+        schema[vol.Optional(_REMOVE_ROW_FIELD, default=False)] = bool
     schema[vol.Optional(CONF_THRESHOLD, default=default_threshold)] = vol.Coerce(float)
     return vol.Schema(schema)
 
 
-def _feature_state_field_name(feature: str) -> str:
-    return f"{feature} state"
+def _feature_row_field_name(index: int) -> str:
+    return f"feature_{index}"
+
+
+def _state_row_field_name(index: int) -> str:
+    return f"state_{index}"
+
+
+def _build_feature_rows(
+    features: list[str],
+    states: dict[str, str],
+    row_count: int | None = None,
+) -> list[tuple[str, str]]:
+    rows = [(feature, str(states.get(feature, ""))) for feature in features]
+    target_count = max(1, row_count or len(rows) or 1)
+    rows = rows[:target_count]
+    while len(rows) < target_count:
+        rows.append(("", ""))
+    return rows
+
+
+def _extract_feature_rows(
+    user_input: dict[str, Any],
+    row_count: int,
+) -> list[tuple[str, str]]:
+    rows: list[tuple[str, str]] = []
+    for index in range(1, row_count + 1):
+        raw_feature = user_input.get(_feature_row_field_name(index), "")
+        raw_state = user_input.get(_state_row_field_name(index), "")
+        feature = str(raw_feature).strip() if raw_feature is not None else ""
+        state = str(raw_state).strip() if raw_state is not None else ""
+        rows.append((feature, state))
+    return rows
+
+
+def _determine_input_row_count(user_input: dict[str, Any], fallback: int) -> int:
+    row_count = max(1, fallback)
+    for key in user_input:
+        if not (key.startswith("feature_") or key.startswith("state_")):
+            continue
+        try:
+            _, raw_index = key.split("_", 1)
+            row_count = max(row_count, int(raw_index))
+        except (TypeError, ValueError):
+            continue
+    return row_count
+
+
+def _rows_to_feature_payload(
+    rows: list[tuple[str, str]],
+) -> tuple[list[str], dict[str, str], dict[str, str]]:
+    errors: dict[str, str] = {}
+    required_features: list[str] = []
+    feature_states: dict[str, str] = {}
+    for index, (feature, state) in enumerate(rows, start=1):
+        feature_field = _feature_row_field_name(index)
+        state_field = _state_row_field_name(index)
+        if feature == "" and state == "":
+            continue
+        if feature == "":
+            errors[feature_field] = "required"
+            continue
+        if state == "":
+            errors[state_field] = "required"
+            continue
+        required_features.append(feature)
+        feature_states[feature] = state
+
+    if not required_features and not errors:
+        errors[_feature_row_field_name(1)] = "required"
+
+    return required_features, feature_states, errors
 
 
 def _build_states_schema(
@@ -172,27 +246,43 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
         default_features = list(self._draft.get(CONF_REQUIRED_FEATURES, []))
         default_states = dict(self._draft.get(CONF_FEATURE_STATES, {}))
         default_threshold = float(self._draft.get(CONF_THRESHOLD, DEFAULT_THRESHOLD))
+        row_count = int(self._draft.get(_DRAFT_FEATURE_ROWS, max(1, len(default_features))))
+        default_rows = _build_feature_rows(default_features, default_states, row_count)
 
         if user_input is not None:
-            required_features = parse_required_features(user_input[CONF_REQUIRED_FEATURES])
-            default_features = list(required_features)
+            input_row_count = _determine_input_row_count(user_input, len(default_rows))
+            rows = _extract_feature_rows(user_input, input_row_count)
             default_threshold = float(user_input.get(CONF_THRESHOLD, default_threshold))
-            if not required_features:
-                errors[CONF_REQUIRED_FEATURES] = "required"
-            feature_states: dict[str, str] = {}
-            for feature in required_features:
-                state_field = _feature_state_field_name(feature)
-                raw_value = user_input.get(state_field)
-                if raw_value is None or str(raw_value).strip() == "":
-                    errors[state_field] = "required"
-                    feature_states[feature] = ""
-                    continue
-                feature_states[feature] = str(raw_value)
-            default_states = feature_states
+            if bool(user_input.get(_ADD_ROW_FIELD)) and len(rows) < _MAX_FEATURE_ROWS:
+                rows.append(("", ""))
+                self._draft[_DRAFT_FEATURE_ROWS] = len(rows)
+                return self.async_show_form(
+                    step_id="features",
+                    data_schema=_build_features_schema(rows, default_threshold),
+                    errors=errors,
+                    description_placeholders={
+                        "features_help": "Pick entities like sensor.temperature or binary_sensor.door.",
+                    },
+                )
+            if bool(user_input.get(_REMOVE_ROW_FIELD)) and len(rows) > 1:
+                rows.pop()
+                self._draft[_DRAFT_FEATURE_ROWS] = len(rows)
+                return self.async_show_form(
+                    step_id="features",
+                    data_schema=_build_features_schema(rows, default_threshold),
+                    errors=errors,
+                    description_placeholders={
+                        "features_help": "Pick entities like sensor.temperature or binary_sensor.door.",
+                    },
+                )
+
+            required_features, feature_states, errors = _rows_to_feature_payload(rows)
+            default_rows = rows
 
             if not errors:
                 self._draft[CONF_REQUIRED_FEATURES] = required_features
                 self._draft[CONF_FEATURE_STATES] = {feature: feature_states[feature] for feature in required_features}
+                self._draft[_DRAFT_FEATURE_ROWS] = len(rows)
                 feature_types = infer_feature_types_from_states(self._draft[CONF_FEATURE_STATES])
                 self._draft[CONF_FEATURE_TYPES] = {
                     feature: feature_types.get(feature, FEATURE_TYPE_NUMERIC)
@@ -216,7 +306,7 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
 
         return self.async_show_form(
             step_id="features",
-            data_schema=_build_features_schema(default_features, default_states, default_threshold),
+            data_schema=_build_features_schema(default_rows, default_threshold),
             errors=errors,
             description_placeholders={
                 "features_help": "Pick entities like sensor.temperature or binary_sensor.door.",
@@ -438,25 +528,41 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
                 self._config_entry.data.get(CONF_THRESHOLD, DEFAULT_THRESHOLD),
             )
         )
+        row_count = int(self._draft.get(_DRAFT_FEATURE_ROWS, max(1, len(default_features))))
+        default_rows = _build_feature_rows(default_features, default_states, row_count)
 
         if user_input is not None:
-            required_features = parse_required_features(user_input[CONF_REQUIRED_FEATURES])
-            default_features = list(required_features)
+            input_row_count = _determine_input_row_count(user_input, len(default_rows))
+            rows = _extract_feature_rows(user_input, input_row_count)
             default_threshold = float(user_input.get(CONF_THRESHOLD, default_threshold))
-            if not required_features:
-                errors[CONF_REQUIRED_FEATURES] = "required"
-            feature_states: dict[str, str] = {}
-            for feature in required_features:
-                state_field = _feature_state_field_name(feature)
-                raw_value = user_input.get(state_field)
-                if raw_value is None or str(raw_value).strip() == "":
-                    errors[state_field] = "required"
-                    feature_states[feature] = ""
-                    continue
-                feature_states[feature] = str(raw_value)
-            default_states = feature_states
+            if bool(user_input.get(_ADD_ROW_FIELD)) and len(rows) < _MAX_FEATURE_ROWS:
+                rows.append(("", ""))
+                self._draft[_DRAFT_FEATURE_ROWS] = len(rows)
+                return self.async_show_form(
+                    step_id="features",
+                    data_schema=_build_features_schema(rows, default_threshold),
+                    errors=errors,
+                    description_placeholders={
+                        "features_help": "Pick entities to include as model features."
+                    },
+                )
+            if bool(user_input.get(_REMOVE_ROW_FIELD)) and len(rows) > 1:
+                rows.pop()
+                self._draft[_DRAFT_FEATURE_ROWS] = len(rows)
+                return self.async_show_form(
+                    step_id="features",
+                    data_schema=_build_features_schema(rows, default_threshold),
+                    errors=errors,
+                    description_placeholders={
+                        "features_help": "Pick entities to include as model features."
+                    },
+                )
+
+            required_features, feature_states, errors = _rows_to_feature_payload(rows)
+            default_rows = rows
 
             if not errors:
+                self._draft[_DRAFT_FEATURE_ROWS] = len(rows)
                 feature_types = infer_feature_types_from_states(feature_states)
                 normalized_feature_types = {
                     feature: feature_types.get(feature, FEATURE_TYPE_NUMERIC)
@@ -486,7 +592,7 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
 
         return self.async_show_form(
             step_id="features",
-            data_schema=_build_features_schema(default_features, default_states, default_threshold),
+            data_schema=_build_features_schema(default_rows, default_threshold),
             errors=errors,
             description_placeholders={
                 "features_help": "Pick entities to include as model features."
