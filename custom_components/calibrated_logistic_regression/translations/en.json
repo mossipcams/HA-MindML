@@ -82,6 +82,13 @@
           "required_features": "Required features"
         }
       },
+      "states": {
+        "title": "Feature States",
+        "description": "Provide current states for each selected feature. Selected features: {states_help}",
+        "data": {
+          "threshold": "Decision threshold (%)"
+        }
+      },
       "diagnostics": {
         "title": "Diagnostics",
         "description": "Configured features: {configured_features}. Missing features: {missing_features}. Last computed: {last_computed_at}."

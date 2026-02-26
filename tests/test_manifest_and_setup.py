@@ -18,7 +18,7 @@ def test_manifest_contains_required_fields() -> None:
     manifest = json.loads(manifest_path.read_text())
     assert manifest["domain"] == "calibrated_logistic_regression"
     assert manifest["name"]
-    assert manifest["version"]
+    assert manifest["version"] == "0.3.7"
     assert manifest["config_flow"] is True
 
 

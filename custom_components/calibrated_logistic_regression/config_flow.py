@@ -259,6 +259,7 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
 
     def __init__(self, config_entry) -> None:
         self._config_entry = config_entry
+        self._draft: dict[str, Any] = {}
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         del user_input
@@ -380,10 +381,8 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
             if not required_features:
                 errors[CONF_REQUIRED_FEATURES] = "required"
             if not errors:
-                return self.async_create_entry(
-                    title="",
-                    data={CONF_REQUIRED_FEATURES: required_features},
-                )
+                self._draft[CONF_REQUIRED_FEATURES] = required_features
+                return await self.async_step_states()
 
         default_features = self._config_entry.options.get(
             CONF_REQUIRED_FEATURES,
@@ -396,6 +395,76 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
             description_placeholders={
                 "features_help": "Pick entities to include as model features."
             },
+        )
+
+    async def async_step_states(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        errors: dict[str, str] = {}
+        required_features = list(
+            self._draft.get(
+                CONF_REQUIRED_FEATURES,
+                self._config_entry.options.get(
+                    CONF_REQUIRED_FEATURES,
+                    self._config_entry.data.get(CONF_REQUIRED_FEATURES, []),
+                ),
+            )
+        )
+
+        if user_input is not None:
+            feature_states: dict[str, str] = {}
+            for feature in required_features:
+                raw_value = user_input.get(feature)
+                if raw_value is None or str(raw_value).strip() == "":
+                    errors[feature] = "required"
+                    continue
+                feature_states[feature] = str(raw_value)
+
+            if not errors:
+                feature_types = infer_feature_types_from_states(feature_states)
+                normalized_feature_types = {
+                    feature: feature_types.get(feature, FEATURE_TYPE_NUMERIC)
+                    for feature in required_features
+                }
+
+                inferred_state_mappings = infer_state_mappings_from_states(feature_states)
+                state_mappings: dict[str, dict[str, float]] = {}
+                for feature in required_features:
+                    if normalized_feature_types[feature] != FEATURE_TYPE_CATEGORICAL:
+                        continue
+                    if feature in inferred_state_mappings:
+                        state_mappings[feature] = inferred_state_mappings[feature]
+                    else:
+                        state_mappings[feature] = {feature_states[feature].casefold(): 1.0}
+
+                return self.async_create_entry(
+                    title="",
+                    data={
+                        CONF_REQUIRED_FEATURES: required_features,
+                        CONF_FEATURE_STATES: feature_states,
+                        CONF_FEATURE_TYPES: normalized_feature_types,
+                        CONF_STATE_MAPPINGS: state_mappings,
+                        CONF_THRESHOLD: float(user_input.get(CONF_THRESHOLD, DEFAULT_THRESHOLD)),
+                    },
+                )
+
+        existing_states = self._config_entry.options.get(
+            CONF_FEATURE_STATES,
+            self._config_entry.data.get(CONF_FEATURE_STATES, {}),
+        )
+        default_states = {
+            feature: str(existing_states.get(feature, ""))
+            for feature in required_features
+        }
+        default_threshold = float(
+            self._config_entry.options.get(
+                CONF_THRESHOLD,
+                self._config_entry.data.get(CONF_THRESHOLD, DEFAULT_THRESHOLD),
+            )
+        )
+        return self.async_show_form(
+            step_id="states",
+            data_schema=_build_states_schema(required_features, default_states, default_threshold),
+            errors=errors,
+            description_placeholders={"states_help": ", ".join(required_features)},
         )
 
     async def async_step_diagnostics(self, user_input: dict[str, Any] | None = None) -> FlowResult:

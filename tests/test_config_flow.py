@@ -112,22 +112,45 @@ def test_options_flow_decision_updates_threshold() -> None:
     assert result["data"]["threshold"] == 72.5
 
 
-def test_options_flow_features_updates_required_features() -> None:
+def test_options_flow_features_then_states_updates_feature_configuration() -> None:
     entry = MagicMock()
     entry.options = {}
-    entry.data = {"required_features": ["sensor.a"], "state_mappings": {}}
+    entry.data = {
+        "required_features": ["sensor.a"],
+        "feature_states": {"sensor.a": "22.5"},
+        "state_mappings": {},
+        "threshold": 50.0,
+    }
 
     flow = ClrOptionsFlow(entry)
-    result = asyncio.run(
+    features_result = asyncio.run(
         flow.async_step_features(
             {
                 "required_features": ["sensor.a", "binary_sensor.window"],
             }
         )
     )
+    assert features_result["type"] == "form"
+    assert features_result["step_id"] == "states"
 
-    assert result["type"] == "create_entry"
-    assert result["data"]["required_features"] == ["sensor.a", "binary_sensor.window"]
+    states_result = asyncio.run(
+        flow.async_step_states(
+            {
+                "sensor.a": "23.0",
+                "binary_sensor.window": "off",
+                "threshold": 65.0,
+            }
+        )
+    )
+    assert states_result["type"] == "create_entry"
+    assert states_result["data"]["required_features"] == ["sensor.a", "binary_sensor.window"]
+    assert states_result["data"]["feature_states"] == {
+        "sensor.a": "23.0",
+        "binary_sensor.window": "off",
+    }
+    assert states_result["data"]["feature_types"]["binary_sensor.window"] == "categorical"
+    assert states_result["data"]["state_mappings"]["binary_sensor.window"] == {"off": 0.0, "on": 1.0}
+    assert states_result["data"]["threshold"] == 65.0
 
 
 def test_user_step_allows_blank_ml_db_path_and_continues() -> None:

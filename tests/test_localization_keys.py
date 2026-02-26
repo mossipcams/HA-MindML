@@ -19,6 +19,7 @@ def test_strings_contains_wizard_and_options_labels() -> None:
 
     options_steps = strings["options"]["step"]
     assert "features" in options_steps
+    assert "states" in options_steps
     assert "model" in options_steps
     assert "feature_source" in options_steps
     assert "decision" in options_steps
