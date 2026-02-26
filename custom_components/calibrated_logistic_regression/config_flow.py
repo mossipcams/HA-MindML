@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 import voluptuous as vol
@@ -159,6 +160,8 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
                 errors[CONF_NAME] = "required"
             if not goal:
                 errors[CONF_GOAL] = "required"
+            if ml_db_path and not os.path.isfile(ml_db_path):
+                errors[CONF_ML_DB_PATH] = "db_not_found"
 
             if not errors:
                 for entry in self._async_current_entries():
@@ -331,21 +334,28 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_model(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         if user_input is not None:
-            return self.async_create_entry(
-                title="",
-                data=self._merged_options(
-                    {
-                        CONF_ML_DB_PATH: resolve_ml_db_path(
-                            getattr(self, "hass", None),
-                            str(user_input.get(CONF_ML_DB_PATH, "")).strip(),
-                        ),
-                        CONF_ML_ARTIFACT_VIEW: str(
-                            user_input.get(CONF_ML_ARTIFACT_VIEW, DEFAULT_ML_ARTIFACT_VIEW)
-                        ).strip()
-                        or DEFAULT_ML_ARTIFACT_VIEW,
-                    }
-                ),
-            )
+            errors: dict[str, str] = {}
+            ml_db_path = str(user_input.get(CONF_ML_DB_PATH, "")).strip()
+            if ml_db_path and not os.path.isfile(ml_db_path):
+                errors[CONF_ML_DB_PATH] = "db_not_found"
+            if not errors:
+                return self.async_create_entry(
+                    title="",
+                    data=self._merged_options(
+                        {
+                            CONF_ML_DB_PATH: resolve_ml_db_path(
+                                getattr(self, "hass", None),
+                                ml_db_path,
+                            ),
+                            CONF_ML_ARTIFACT_VIEW: str(
+                                user_input.get(CONF_ML_ARTIFACT_VIEW, DEFAULT_ML_ARTIFACT_VIEW)
+                            ).strip()
+                            or DEFAULT_ML_ARTIFACT_VIEW,
+                        }
+                    ),
+                )
+        else:
+            errors = {}
 
         default_db_path = self._config_entry.options.get(
             CONF_ML_DB_PATH,
@@ -366,6 +376,7 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
                     vol.Required(CONF_ML_ARTIFACT_VIEW, default=default_view): str,
                 }
             ),
+            errors=errors,
         )
 
     async def async_step_feature_source(self, user_input: dict[str, Any] | None = None) -> FlowResult:

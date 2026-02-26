@@ -260,7 +260,7 @@ def test_user_step_blank_ml_db_path_uses_appdaemon_default() -> None:
         )
     )
 
-    assert flow._draft["ml_db_path"] == "/homeassistant/appdaemon/ha_ml_data_layer.db"
+    assert flow._draft["ml_db_path"] == "/addon_configs/a0d7b954_appdaemon/appdaemon/ha_ml_data_layer.db"
 
 
 def test_wizard_features_step_accepts_list_payload_and_creates_entry() -> None:

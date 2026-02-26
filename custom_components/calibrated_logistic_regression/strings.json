@@ -24,6 +24,7 @@
       }
     },
     "error": {
+      "db_not_found": "Database file not found at the specified path.",
       "invalid_state_mappings": "State mappings must be JSON object of entity_id to state-to-number mapping.",
       "required": "This field is required."
     },
