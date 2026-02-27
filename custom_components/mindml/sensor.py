@@ -259,6 +259,13 @@ class CalibratedLogisticRegressionSensor(SensorEntity, RestoreEntity):
         self._linear_score = result.linear_score
         self._feature_contributions = dict(result.feature_contributions)
         self._unavailable_reason = result.unavailable_reason
+        if (
+            not result.available
+            and self._model_source == "manual"
+            and self._model_artifact_error
+            and result.unavailable_reason in {"model_payload_missing", "lightgbm_inference_error"}
+        ):
+            self._unavailable_reason = "model_artifact_error"
         self._is_above_threshold = result.is_above_threshold
         self._decision = result.decision
         self._store_runtime_diagnostics()

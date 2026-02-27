@@ -283,3 +283,39 @@ def test_sensor_handles_no_previous_state(monkeypatch) -> None:
 
     assert sensor.native_value is None
     assert sensor.available is False
+
+
+def test_sensor_surfaces_model_artifact_error_reason(monkeypatch) -> None:
+    hass = MagicMock()
+    hass.states.get.side_effect = lambda entity_id: {
+        "sensor.a": State("sensor.a", "2"),
+        "sensor.b": State("sensor.b", "1"),
+    }.get(entity_id)
+
+    class _Provider:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+        def load(self):
+            from custom_components.mindml.lightgbm_inference import LightGBMModelSpec
+            from custom_components.mindml.model_provider import ModelProviderResult
+
+            return ModelProviderResult(
+                model=LightGBMModelSpec(feature_names=["sensor.a", "sensor.b"], model_payload={}),
+                source="manual",
+                artifact_error="db_not_found: /config/appdaemon/ha_ml_data_layer.db",
+                artifact_meta={},
+            )
+
+    monkeypatch.setattr(
+        "custom_components.mindml.sensor.SqliteLightGBMModelProvider",
+        _Provider,
+    )
+
+    sensor = CalibratedLogisticRegressionSensor(hass, _build_entry())
+    sensor._recompute_state(datetime.now())
+
+    attrs = sensor.extra_state_attributes
+    assert sensor.available is False
+    assert attrs["model_artifact_error"] is not None
+    assert attrs["unavailable_reason"] == "model_artifact_error"

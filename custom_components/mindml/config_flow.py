@@ -156,11 +156,12 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
             name = str(user_input[CONF_NAME]).strip()
             goal = str(user_input[CONF_GOAL]).strip()
             ml_db_path = str(user_input.get(CONF_ML_DB_PATH, "")).strip()
+            resolved_db_path = resolve_ml_db_path(self.hass, ml_db_path)
             if not name:
                 errors[CONF_NAME] = "required"
             if not goal:
                 errors[CONF_GOAL] = "required"
-            if ml_db_path and not os.path.isfile(ml_db_path):
+            if not os.path.isfile(resolved_db_path):
                 errors[CONF_ML_DB_PATH] = "db_not_found"
 
             if not errors:
@@ -169,7 +170,7 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
                         return self.async_abort(reason="already_configured")
                 self._draft[CONF_NAME] = name
                 self._draft[CONF_GOAL] = goal
-                self._draft[CONF_ML_DB_PATH] = resolve_ml_db_path(self.hass, ml_db_path)
+                self._draft[CONF_ML_DB_PATH] = resolved_db_path
                 self._draft[CONF_ML_ARTIFACT_VIEW] = str(
                     user_input.get(CONF_ML_ARTIFACT_VIEW, DEFAULT_ML_ARTIFACT_VIEW)
                 ).strip() or DEFAULT_ML_ARTIFACT_VIEW
@@ -336,17 +337,15 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             errors: dict[str, str] = {}
             ml_db_path = str(user_input.get(CONF_ML_DB_PATH, "")).strip()
-            if ml_db_path and not os.path.isfile(ml_db_path):
+            resolved_db_path = resolve_ml_db_path(getattr(self, "hass", None), ml_db_path)
+            if not os.path.isfile(resolved_db_path):
                 errors[CONF_ML_DB_PATH] = "db_not_found"
             if not errors:
                 return self.async_create_entry(
                     title="",
                     data=self._merged_options(
                         {
-                            CONF_ML_DB_PATH: resolve_ml_db_path(
-                                getattr(self, "hass", None),
-                                ml_db_path,
-                            ),
+                            CONF_ML_DB_PATH: resolved_db_path,
                             CONF_ML_ARTIFACT_VIEW: str(
                                 user_input.get(CONF_ML_ARTIFACT_VIEW, DEFAULT_ML_ARTIFACT_VIEW)
                             ).strip()

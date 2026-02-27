@@ -56,3 +56,27 @@ def test_options_model_shows_error_when_db_path_not_found() -> None:
     assert result["type"] == "form"
     assert result["step_id"] == "model"
     assert result["errors"]["ml_db_path"] == "db_not_found"
+
+
+def test_user_step_shows_error_when_blank_db_resolves_to_missing_path(monkeypatch) -> None:
+    flow = CalibratedLogisticRegressionConfigFlow()
+    flow.hass = MagicMock()
+    flow._async_current_entries = MagicMock(return_value=[])
+    monkeypatch.setattr(
+        "custom_components.mindml.config_flow.resolve_ml_db_path",
+        lambda hass, configured_path: "/nonexistent/resolved/ha_ml_data_layer.db",
+    )
+
+    result = asyncio.run(
+        flow.async_step_user(
+            {
+                "name": "Test Sensor",
+                "goal": "risk",
+                "ml_db_path": "",
+            }
+        )
+    )
+
+    assert result["type"] == "form"
+    assert result["step_id"] == "user"
+    assert result["errors"]["ml_db_path"] == "db_not_found"
