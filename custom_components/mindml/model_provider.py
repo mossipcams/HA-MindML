@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
@@ -19,6 +19,7 @@ class ModelProviderResult:
     source: str
     artifact_error: str | None
     artifact_meta: dict[str, object]
+    training_result: dict[str, object] = field(default_factory=dict)
 
 
 class SqliteLightGBMModelProvider:
@@ -61,7 +62,49 @@ class SqliteLightGBMModelProvider:
             )
         return None
 
+    def _load_latest_training_result(self) -> dict[str, object]:
+        db_file = Path(self._db_path)
+        if not db_file.exists():
+            return {}
+        conn = sqlite3.connect(db_file)
+        conn.row_factory = sqlite3.Row
+        try:
+            row = conn.execute(
+                """
+                SELECT
+                    status,
+                    row_count,
+                    day_count,
+                    notes,
+                    finished_at_utc,
+                    started_at_utc,
+                    model_type,
+                    feature_set_version,
+                    artifact_created_at_utc
+                FROM vw_lightgbm_latest_training_result
+                LIMIT 1
+                """
+            ).fetchone()
+        except sqlite3.Error:
+            return {}
+        finally:
+            conn.close()
+        if row is None:
+            return {}
+        return {
+            "status": row["status"],
+            "row_count": row["row_count"],
+            "day_count": row["day_count"],
+            "notes": row["notes"],
+            "finished_at_utc": row["finished_at_utc"],
+            "started_at_utc": row["started_at_utc"],
+            "model_type": row["model_type"],
+            "feature_set_version": row["feature_set_version"],
+            "artifact_created_at_utc": row["artifact_created_at_utc"],
+        }
+
     def load(self) -> ModelProviderResult:
+        training_result = self._load_latest_training_result()
         try:
             contract_error = self._validate_contract_version()
             if contract_error is not None:
@@ -83,6 +126,7 @@ class SqliteLightGBMModelProvider:
                 source="ml_data_layer",
                 artifact_error=None,
                 artifact_meta=artifact_meta,
+                training_result=training_result,
             )
         except Exception as exc:  # pragma: no cover - runtime fallback guard
             fallback = LightGBMModelSpec(
@@ -94,4 +138,5 @@ class SqliteLightGBMModelProvider:
                 source="manual",
                 artifact_error=str(exc),
                 artifact_meta={},
+                training_result=training_result,
             )

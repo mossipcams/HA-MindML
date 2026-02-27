@@ -13,6 +13,7 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import (
+    CONF_FEATURE_STATES,
     CONF_FEATURE_TYPES,
     CONF_ML_ARTIFACT_VIEW,
     CONF_ML_DB_PATH,
@@ -29,6 +30,7 @@ from .const import (
     DOMAIN,
 )
 from .feature_provider import RealtimeHistoryFeatureProvider, SqliteSnapshotFeatureProvider
+from .ingestion_rules import sync_ingestion_rules
 from .lightgbm_inference import LightGBMModelSpec, run_lightgbm_inference
 from .model_provider import ModelProviderResult, SqliteLightGBMModelProvider
 from .paths import resolve_ml_db_path
@@ -82,6 +84,22 @@ class CalibratedLogisticRegressionSensor(SensorEntity, RestoreEntity):
         self._model_source = model_result.source
         self._model_artifact_error = model_result.artifact_error
         self._model_artifact_meta: dict[str, Any] = dict(model_result.artifact_meta)
+        self._training_result: dict[str, Any] = dict(model_result.training_result)
+        self._ingestion_sync_error: str | None = None
+        self._ingestion_rules_count: int = 0
+
+        feature_states = {
+            str(entity_id): str(state)
+            for entity_id, state in dict(config.get(CONF_FEATURE_STATES, {})).items()
+        }
+        try:
+            self._ingestion_rules_count = sync_ingestion_rules(
+                db_path=self._ml_db_path,
+                source=f"mindml:{self._entry_id}",
+                feature_states=feature_states,
+            )
+        except Exception as exc:  # pragma: no cover - diagnostics-only
+            self._ingestion_sync_error = str(exc)
 
         self._required_features: list[str] = list(config.get(CONF_REQUIRED_FEATURES, []))
         if self._model.feature_names and self._ml_feature_source == "ml_snapshot":
@@ -214,6 +232,13 @@ class CalibratedLogisticRegressionSensor(SensorEntity, RestoreEntity):
             "model_artifact_meta": dict(self._model_artifact_meta),
             "feature_source": self._ml_feature_source,
             "feature_view": self._ml_feature_view,
+            "ingestion_rules_count": self._ingestion_rules_count,
+            "ingestion_sync_error": self._ingestion_sync_error,
+            "training_status": self._training_result.get("status"),
+            "training_row_count": self._training_result.get("row_count"),
+            "training_day_count": self._training_result.get("day_count"),
+            "training_notes": self._training_result.get("notes"),
+            "training_finished_at_utc": self._training_result.get("finished_at_utc"),
         }
 
     def _recompute_state(self, now: datetime) -> None:

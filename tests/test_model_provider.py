@@ -96,3 +96,61 @@ def test_sqlite_lightgbm_model_provider_rejects_mismatched_contract_version(
     assert result.model.model_payload == {}
     assert result.artifact_error is not None
     assert "contract_version" in result.artifact_error
+
+
+def test_sqlite_lightgbm_model_provider_loads_latest_training_result(tmp_path: Path) -> None:
+    db_path = tmp_path / "ha_ml_data_layer.db"
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            """
+            CREATE TABLE metadata (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at_utc TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO metadata(key, value, updated_at_utc)
+            VALUES ('contract_version', '2', '2026-02-27T00:00:00+00:00')
+            """
+        )
+        conn.execute(
+            """
+            CREATE VIEW vw_lightgbm_latest_training_result AS
+            SELECT
+                1 AS run_id,
+                '2026-02-27T00:00:00+00:00' AS started_at_utc,
+                '2026-02-27T00:10:00+00:00' AS finished_at_utc,
+                'completed' AS status,
+                12 AS row_count,
+                3 AS day_count,
+                'ok' AS notes,
+                'lightgbm_like' AS model_type,
+                'v1' AS feature_set_version,
+                '2026-02-27T00:10:00+00:00' AS artifact_created_at_utc
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    provider = SqliteLightGBMModelProvider(
+        db_path=str(db_path),
+        artifact_view="vw_lightgbm_latest_model_artifact",
+        fallback_feature_names=["event_count"],
+        artifact_loader=lambda db_path, artifact_view: LightGBMModelArtifact(
+            model_payload={"weights": [0.1], "intercept": 0.0},
+            feature_names=["event_count"],
+            model_type="lightgbm_like",
+            feature_set_version="v1",
+            created_at_utc="2026-02-27T00:10:00+00:00",
+        ),
+    )
+    result = provider.load()
+
+    assert result.training_result["status"] == "completed"
+    assert result.training_result["row_count"] == 12
+    assert result.training_result["day_count"] == 3

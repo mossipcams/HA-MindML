@@ -487,18 +487,19 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
             )
             if not feature_values:
                 errors["feature"] = "required"
-            if state == "":
-                errors["state"] = "required"
 
             if not errors:
                 self._draft[CONF_THRESHOLD] = default_threshold
                 existing = {item[0]: index for index, item in enumerate(pairs)}
-                for feature in feature_values:
-                    if feature in existing:
-                        pairs[existing[feature]] = (feature, state)
-                    else:
-                        pairs.append((feature, state))
-                        existing[feature] = len(pairs) - 1
+                if state == "":
+                    pairs = [pair for pair in pairs if pair[0] not in set(feature_values)]
+                else:
+                    for feature in feature_values:
+                        if feature in existing:
+                            pairs[existing[feature]] = (feature, state)
+                        else:
+                            pairs.append((feature, state))
+                            existing[feature] = len(pairs) - 1
                 self._draft[_DRAFT_FEATURE_PAIRS] = pairs
                 return await self.async_step_finish_features()
 
@@ -518,7 +519,18 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
         del user_input
         pairs: list[tuple[str, str]] = list(self._draft.get(_DRAFT_FEATURE_PAIRS, []))
         if not pairs:
-            return await self.async_step_features()
+            return self.async_create_entry(
+                title="",
+                data=self._merged_options(
+                    {
+                        CONF_REQUIRED_FEATURES: [],
+                        CONF_FEATURE_STATES: {},
+                        CONF_FEATURE_TYPES: {},
+                        CONF_STATE_MAPPINGS: {},
+                        CONF_THRESHOLD: float(self._draft.get(CONF_THRESHOLD, DEFAULT_THRESHOLD)),
+                    }
+                ),
+            )
 
         required_features, feature_states, feature_types, state_mappings = _pairs_to_feature_payload(pairs)
         _LOGGER.debug(

@@ -428,3 +428,30 @@ def test_wizard_logs_feature_normalization_and_finish_summary(caplog) -> None:
     messages = [record.getMessage() for record in caplog.records]
     assert any("normalized_features" in message for message in messages)
     assert any("finish_features" in message for message in messages)
+
+
+def test_options_flow_features_allows_deleting_existing_feature_with_empty_state() -> None:
+    entry = MagicMock()
+    entry.options = {
+        "required_features": ["sensor.a", "binary_sensor.window"],
+        "feature_states": {"sensor.a": "22.5", "binary_sensor.window": "on"},
+        "state_mappings": {},
+        "feature_types": {"sensor.a": "numeric", "binary_sensor.window": "categorical"},
+        "threshold": 50.0,
+    }
+    entry.data = {}
+
+    flow = ClrOptionsFlow(entry)
+    updated = asyncio.run(
+        flow.async_step_features(
+            {
+                "feature": "sensor.a",
+                "state": "",
+                "threshold": 50.0,
+            }
+        )
+    )
+
+    assert updated["type"] == "create_entry"
+    assert updated["data"]["required_features"] == ["binary_sensor.window"]
+    assert updated["data"]["feature_states"] == {"binary_sensor.window": "on"}

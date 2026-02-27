@@ -102,6 +102,7 @@ def test_sensor_updates_probability_attributes(monkeypatch) -> None:
                 source="ml_data_layer",
                 artifact_error=None,
                 artifact_meta={},
+                training_result={"status": "completed", "row_count": 10, "day_count": 3, "notes": "ok"},
             )
 
     monkeypatch.setattr(
@@ -117,6 +118,9 @@ def test_sensor_updates_probability_attributes(monkeypatch) -> None:
     attrs = sensor.extra_state_attributes
     assert attrs["model_runtime"] == "lightgbm"
     assert attrs["missing_features"] == []
+    assert attrs["training_status"] == "completed"
+    assert attrs["training_row_count"] == 10
+    assert attrs["training_day_count"] == 3
     assert attrs["feature_values"]["sensor.a"] == 2.0
     assert attrs["decision"] in {"positive", "negative"}
 
@@ -278,11 +282,54 @@ def test_sensor_handles_no_previous_state(monkeypatch) -> None:
     sensor = CalibratedLogisticRegressionSensor(hass, entry)
     sensor.async_get_last_state = AsyncMock(return_value=None)
     sensor._recompute_state = lambda now: None
-
     asyncio.run(sensor.async_added_to_hass())
 
     assert sensor.native_value is None
     assert sensor.available is True
+
+
+def test_sensor_syncs_ingestion_rules_from_feature_states(monkeypatch) -> None:
+    hass = MagicMock()
+    entry = _build_entry()
+    entry.data["feature_states"] = {"sensor.a": "on", "sensor.b": "off"}
+
+    class _Provider:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+        def load(self):
+            from custom_components.mindml.lightgbm_inference import LightGBMModelSpec
+            from custom_components.mindml.model_provider import ModelProviderResult
+
+            return ModelProviderResult(
+                model=LightGBMModelSpec(
+                    feature_names=["sensor.a", "sensor.b"],
+                    model_payload={"intercept": 0.0, "weights": [0.0, 0.0]},
+                ),
+                source="ml_data_layer",
+                artifact_error=None,
+                artifact_meta={},
+            )
+
+    sync_call: dict[str, object] = {}
+
+    def _sync_ingestion_rules(**kwargs):
+        sync_call.update(kwargs)
+        return 2
+
+    monkeypatch.setattr(
+        "custom_components.mindml.sensor.SqliteLightGBMModelProvider",
+        _Provider,
+    )
+    monkeypatch.setattr(
+        "custom_components.mindml.sensor.sync_ingestion_rules",
+        _sync_ingestion_rules,
+    )
+
+    CalibratedLogisticRegressionSensor(hass, entry)
+
+    assert sync_call["source"] == "mindml:entry-1"
+    assert sync_call["feature_states"] == {"sensor.a": "on", "sensor.b": "off"}
 
 
 def test_sensor_surfaces_model_artifact_error_reason(monkeypatch) -> None:
