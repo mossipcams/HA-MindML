@@ -26,6 +26,7 @@ def test_wizard_creates_entry_after_single_feature() -> None:
                 "name": "Kitchen MindML",
                 "goal": "risk",
                 "ml_db_path": "/tmp/ha_ml_data_layer.db",
+                "bed_presence_entity": "binary_sensor.bedtime",
             }
         )
     )
@@ -45,6 +46,7 @@ def test_wizard_creates_entry_after_single_feature() -> None:
     assert created["title"] == "Kitchen MindML"
     assert created["data"]["required_features"] == ["sensor.a"]
     assert created["data"]["feature_states"] == {"sensor.a": "22.5"}
+    assert created["data"]["bed_presence_entity"] == "binary_sensor.bedtime"
     assert created["data"]["threshold"] == 65.0
 
 
@@ -208,6 +210,7 @@ def test_options_flow_features_preserve_existing_ml_settings() -> None:
         "ml_artifact_view": "vw_lightgbm_latest_model_artifact",
         "ml_feature_source": "ml_snapshot",
         "ml_feature_view": "vw_latest_feature_snapshot",
+        "bed_presence_entity": "binary_sensor.bedtime",
     }
     entry.data = {}
 
@@ -228,6 +231,7 @@ def test_options_flow_features_preserve_existing_ml_settings() -> None:
     assert updated["data"]["ml_artifact_view"] == "vw_lightgbm_latest_model_artifact"
     assert updated["data"]["ml_feature_source"] == "ml_snapshot"
     assert updated["data"]["ml_feature_view"] == "vw_latest_feature_snapshot"
+    assert updated["data"]["bed_presence_entity"] == "binary_sensor.bedtime"
 
 
 def test_user_step_allows_blank_ml_db_path_and_continues(monkeypatch, tmp_path) -> None:

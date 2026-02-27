@@ -27,6 +27,7 @@ def _build_entry() -> MagicMock:
         "ml_db_path": "/tmp/ha_ml_data_layer.db",
         "ml_artifact_view": "vw_clr_latest_model_artifact",
         "ml_feature_source": "hass_state",
+        "bed_presence_entity": "binary_sensor.bedtime",
     }
     entry.options = {}
     return entry
@@ -121,6 +122,7 @@ def test_sensor_updates_probability_attributes(monkeypatch) -> None:
     assert attrs["training_status"] == "completed"
     assert attrs["training_row_count"] == 10
     assert attrs["training_day_count"] == 3
+    assert attrs["bed_presence_entity"] == "binary_sensor.bedtime"
     assert attrs["feature_values"]["sensor.a"] == 2.0
     assert attrs["decision"] in {"positive", "negative"}
 

@@ -15,6 +15,7 @@ def test_user_schema_contains_name_goal_and_ml_settings() -> None:
     assert "ml_artifact_view" in keys
     assert "ml_feature_source" in keys
     assert "ml_feature_view" in keys
+    assert "bed_presence_entity" in keys
 
 
 def test_features_schema_contains_required_features() -> None:

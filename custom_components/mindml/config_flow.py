@@ -12,6 +12,7 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_BED_PRESENCE_ENTITY,
     CONF_FEATURE_TYPES,
     CONF_FEATURE_STATES,
     CONF_GOAL,
@@ -103,6 +104,9 @@ def _build_user_schema() -> vol.Schema:
                 )
             ),
             vol.Optional(CONF_ML_FEATURE_VIEW, default=DEFAULT_ML_FEATURE_VIEW): str,
+            vol.Optional(CONF_BED_PRESENCE_ENTITY, default=""): selector.EntitySelector(
+                selector.EntitySelectorConfig(multiple=False)
+            ),
         }
     )
 
@@ -180,6 +184,9 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
                 self._draft[CONF_ML_FEATURE_VIEW] = str(
                     user_input.get(CONF_ML_FEATURE_VIEW, DEFAULT_ML_FEATURE_VIEW)
                 ).strip() or DEFAULT_ML_FEATURE_VIEW
+                self._draft[CONF_BED_PRESENCE_ENTITY] = str(
+                    user_input.get(CONF_BED_PRESENCE_ENTITY, "")
+                ).strip()
                 self._draft[_DRAFT_FEATURE_PAIRS] = []
                 return await self.async_step_features()
 
@@ -273,6 +280,7 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
                 CONF_ML_ARTIFACT_VIEW: self._draft[CONF_ML_ARTIFACT_VIEW],
                 CONF_ML_FEATURE_SOURCE: self._draft[CONF_ML_FEATURE_SOURCE],
                 CONF_ML_FEATURE_VIEW: self._draft[CONF_ML_FEATURE_VIEW],
+                CONF_BED_PRESENCE_ENTITY: self._draft[CONF_BED_PRESENCE_ENTITY],
             },
         )
 
@@ -315,6 +323,9 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
                 self._existing_value(CONF_ML_FEATURE_VIEW, DEFAULT_ML_FEATURE_VIEW)
             ).strip()
             or DEFAULT_ML_FEATURE_VIEW,
+            CONF_BED_PRESENCE_ENTITY: str(
+                self._existing_value(CONF_BED_PRESENCE_ENTITY, "")
+            ).strip(),
         }
         merged.update(dict(self._config_entry.options))
         merged.update(updates)
@@ -350,6 +361,9 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
                                 user_input.get(CONF_ML_ARTIFACT_VIEW, DEFAULT_ML_ARTIFACT_VIEW)
                             ).strip()
                             or DEFAULT_ML_ARTIFACT_VIEW,
+                            CONF_BED_PRESENCE_ENTITY: str(
+                                user_input.get(CONF_BED_PRESENCE_ENTITY, "")
+                            ).strip(),
                         }
                     ),
                 )
@@ -367,12 +381,20 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
             CONF_ML_ARTIFACT_VIEW,
             self._config_entry.data.get(CONF_ML_ARTIFACT_VIEW, DEFAULT_ML_ARTIFACT_VIEW),
         )
+        default_bed_presence_entity = self._config_entry.options.get(
+            CONF_BED_PRESENCE_ENTITY,
+            self._config_entry.data.get(CONF_BED_PRESENCE_ENTITY, ""),
+        )
         return self.async_show_form(
             step_id="model",
             data_schema=vol.Schema(
                 {
                     vol.Optional(CONF_ML_DB_PATH, default=default_db_path): str,
                     vol.Required(CONF_ML_ARTIFACT_VIEW, default=default_view): str,
+                    vol.Optional(
+                        CONF_BED_PRESENCE_ENTITY,
+                        default=default_bed_presence_entity,
+                    ): selector.EntitySelector(selector.EntitySelectorConfig(multiple=False)),
                 }
             ),
             errors=errors,

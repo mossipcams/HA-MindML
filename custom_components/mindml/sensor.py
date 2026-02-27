@@ -13,6 +13,7 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import (
+    CONF_BED_PRESENCE_ENTITY,
     CONF_FEATURE_STATES,
     CONF_FEATURE_TYPES,
     CONF_ML_ARTIFACT_VIEW,
@@ -71,6 +72,7 @@ class CalibratedLogisticRegressionSensor(SensorEntity, RestoreEntity):
         self._ml_feature_view = str(
             config.get(CONF_ML_FEATURE_VIEW, DEFAULT_ML_FEATURE_VIEW)
         ).strip() or DEFAULT_ML_FEATURE_VIEW
+        self._bed_presence_entity = str(config.get(CONF_BED_PRESENCE_ENTITY, "")).strip()
 
         requested_features = list(config.get(CONF_REQUIRED_FEATURES, []))
         model_provider = SqliteLightGBMModelProvider(
@@ -232,6 +234,7 @@ class CalibratedLogisticRegressionSensor(SensorEntity, RestoreEntity):
             "model_artifact_meta": dict(self._model_artifact_meta),
             "feature_source": self._ml_feature_source,
             "feature_view": self._ml_feature_view,
+            "bed_presence_entity": self._bed_presence_entity,
             "ingestion_rules_count": self._ingestion_rules_count,
             "ingestion_sync_error": self._ingestion_sync_error,
             "training_status": self._training_result.get("status"),
