@@ -36,11 +36,13 @@ def test_features_step_description_mentions_inline_states() -> None:
 
     config_features_description = strings["config"]["step"]["features"]["description"]
     options_features_description = strings["options"]["step"]["features"]["description"]
+    options_add_description = strings["options"]["step"]["features_add"]["description"]
 
     assert "state" in config_features_description.casefold()
-    assert "state" in options_features_description.casefold()
+    assert "current features" in options_features_description.casefold()
+    assert "state" in options_add_description.casefold()
     assert "one feature" in config_features_description.casefold()
-    assert "one feature" in options_features_description.casefold()
+    assert "one feature" in options_add_description.casefold()
 
 
 def test_strings_include_bed_presence_entity_label() -> None:
@@ -53,3 +55,11 @@ def test_strings_include_bed_presence_entity_label() -> None:
     assert "bed_presence_entity" in config_user_data
     assert config_user_data["bed_presence_entity"] == "Bed Presence Entity"
     assert "bed_presence_entity" in options_model_data
+
+
+def test_options_features_strings_include_management_action() -> None:
+    path = Path("custom_components/mindml/strings.json")
+    strings = json.loads(path.read_text())
+
+    options_features_data = strings["options"]["step"]["features"]["data"]
+    assert "action" in options_features_data

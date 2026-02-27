@@ -68,10 +68,32 @@
       },
       "features": {
         "title": "Features",
+        "description": "Current features: {current_features}. Choose an action.",
+        "data": {
+          "action": "Action"
+        }
+      },
+      "features_add": {
+        "title": "Add Feature",
         "description": "Enter one feature and state pair. {features_help}",
         "data": {
           "feature": "Feature",
           "state": "State",
+          "threshold": "Decision threshold (%)"
+        }
+      },
+      "features_edit": {
+        "title": "Edit Feature",
+        "data": {
+          "feature": "Feature",
+          "state": "State",
+          "threshold": "Decision threshold (%)"
+        }
+      },
+      "features_delete": {
+        "title": "Delete Feature",
+        "data": {
+          "feature": "Feature",
           "threshold": "Decision threshold (%)"
         }
       },

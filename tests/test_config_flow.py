@@ -459,3 +459,96 @@ def test_options_flow_features_allows_deleting_existing_feature_with_empty_state
     assert updated["type"] == "create_entry"
     assert updated["data"]["required_features"] == ["binary_sensor.window"]
     assert updated["data"]["feature_states"] == {"binary_sensor.window": "on"}
+
+
+def test_options_flow_features_prefills_existing_feature_on_reopen() -> None:
+    entry = MagicMock()
+    entry.options = {}
+    entry.data = {
+        "required_features": ["sensor.a", "binary_sensor.window"],
+        "feature_states": {"sensor.a": "22.5", "binary_sensor.window": "on"},
+        "state_mappings": {},
+        "threshold": 50.0,
+    }
+
+    flow = ClrOptionsFlow(entry)
+    result = asyncio.run(flow.async_step_features())
+
+    assert result["type"] == "form"
+    schema = result["data_schema"]
+    keys = [str(marker.schema) for marker in schema.schema]
+    assert keys == ["action"]
+
+
+def test_options_flow_features_shows_management_view_with_current_features() -> None:
+    entry = MagicMock()
+    entry.options = {}
+    entry.data = {
+        "required_features": ["sensor.a", "binary_sensor.window"],
+        "feature_states": {"sensor.a": "22.5", "binary_sensor.window": "on"},
+        "state_mappings": {},
+        "threshold": 50.0,
+    }
+
+    flow = ClrOptionsFlow(entry)
+    result = asyncio.run(flow.async_step_features())
+
+    assert result["type"] == "form"
+    assert result["step_id"] == "features"
+    assert "sensor.a=22.5" in result["description_placeholders"]["current_features"]
+    assert "binary_sensor.window=on" in result["description_placeholders"]["current_features"]
+    schema = result["data_schema"]
+    keys = [str(marker.schema) for marker in schema.schema]
+    assert keys == ["action"]
+
+
+def test_options_flow_features_edit_action_updates_selected_feature() -> None:
+    entry = MagicMock()
+    entry.options = {}
+    entry.data = {
+        "required_features": ["sensor.a", "binary_sensor.window"],
+        "feature_states": {"sensor.a": "22.5", "binary_sensor.window": "on"},
+        "state_mappings": {},
+        "threshold": 50.0,
+    }
+
+    flow = ClrOptionsFlow(entry)
+    action_form = asyncio.run(flow.async_step_features({"action": "edit"}))
+    assert action_form["type"] == "form"
+    assert action_form["step_id"] == "features_edit"
+
+    updated = asyncio.run(
+        flow.async_step_features_edit(
+            {
+                "feature": "sensor.a",
+                "state": "23.0",
+                "threshold": 65.0,
+            }
+        )
+    )
+
+    assert updated["type"] == "create_entry"
+    assert updated["data"]["feature_states"]["sensor.a"] == "23.0"
+    assert updated["data"]["required_features"] == ["sensor.a", "binary_sensor.window"]
+
+
+def test_options_flow_features_delete_action_removes_selected_feature() -> None:
+    entry = MagicMock()
+    entry.options = {}
+    entry.data = {
+        "required_features": ["sensor.a", "binary_sensor.window"],
+        "feature_states": {"sensor.a": "22.5", "binary_sensor.window": "on"},
+        "state_mappings": {},
+        "threshold": 50.0,
+    }
+
+    flow = ClrOptionsFlow(entry)
+    action_form = asyncio.run(flow.async_step_features({"action": "delete"}))
+    assert action_form["type"] == "form"
+    assert action_form["step_id"] == "features_delete"
+
+    updated = asyncio.run(flow.async_step_features_delete({"feature": "sensor.a"}))
+
+    assert updated["type"] == "create_entry"
+    assert updated["data"]["required_features"] == ["binary_sensor.window"]
+    assert updated["data"]["feature_states"] == {"binary_sensor.window": "on"}

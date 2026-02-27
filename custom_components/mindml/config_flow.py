@@ -224,12 +224,15 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
             if not errors:
                 self._draft[CONF_THRESHOLD] = default_threshold
                 existing = {item[0]: index for index, item in enumerate(pairs)}
-                for feature in feature_values:
-                    if feature in existing:
-                        pairs[existing[feature]] = (feature, state)
-                    else:
-                        pairs.append((feature, state))
-                        existing[feature] = len(pairs) - 1
+                if state == "":
+                    pairs = [pair for pair in pairs if pair[0] not in set(feature_values)]
+                else:
+                    for feature in feature_values:
+                        if feature in existing:
+                            pairs[existing[feature]] = (feature, state)
+                        else:
+                            pairs.append((feature, state))
+                            existing[feature] = len(pairs) - 1
                 self._draft[_DRAFT_FEATURE_PAIRS] = pairs
                 return await self.async_step_finish_features()
 
@@ -330,6 +333,42 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
         merged.update(dict(self._config_entry.options))
         merged.update(updates)
         return merged
+
+    def _ensure_draft_pairs(self) -> list[tuple[str, str]]:
+        if _DRAFT_FEATURE_PAIRS not in self._draft:
+            existing_features = self._config_entry.options.get(
+                CONF_REQUIRED_FEATURES,
+                self._config_entry.data.get(CONF_REQUIRED_FEATURES, []),
+            )
+            existing_states = self._config_entry.options.get(
+                CONF_FEATURE_STATES,
+                self._config_entry.data.get(CONF_FEATURE_STATES, {}),
+            )
+            self._draft[_DRAFT_FEATURE_PAIRS] = [
+                (feature, str(existing_states.get(feature, "")))
+                for feature in existing_features
+            ]
+        return list(self._draft.get(_DRAFT_FEATURE_PAIRS, []))
+
+    def _persist_pairs(self, *, pairs: list[tuple[str, str]], threshold: float) -> FlowResult:
+        required_features, feature_states, feature_types, state_mappings = _pairs_to_feature_payload(pairs)
+        _LOGGER.debug(
+            "options_finish_features count=%d required_features=%s",
+            len(required_features),
+            required_features,
+        )
+        return self.async_create_entry(
+            title="",
+            data=self._merged_options(
+                {
+                    CONF_REQUIRED_FEATURES: required_features,
+                    CONF_FEATURE_STATES: feature_states,
+                    CONF_FEATURE_TYPES: feature_types,
+                    CONF_STATE_MAPPINGS: state_mappings,
+                    CONF_THRESHOLD: float(threshold),
+                }
+            ),
+        )
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         del user_input
@@ -469,22 +508,54 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
         )
 
     async def async_step_features(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        errors: dict[str, str] = {}
-        if _DRAFT_FEATURE_PAIRS not in self._draft:
-            existing_features = self._config_entry.options.get(
-                CONF_REQUIRED_FEATURES,
-                self._config_entry.data.get(CONF_REQUIRED_FEATURES, []),
+        pairs = self._ensure_draft_pairs()
+        default_threshold = float(
+            self._draft.get(
+                CONF_THRESHOLD,
+                self._config_entry.options.get(
+                    CONF_THRESHOLD,
+                    self._config_entry.data.get(CONF_THRESHOLD, DEFAULT_THRESHOLD),
+                ),
             )
-            existing_states = self._config_entry.options.get(
-                CONF_FEATURE_STATES,
-                self._config_entry.data.get(CONF_FEATURE_STATES, {}),
-            )
-            self._draft[_DRAFT_FEATURE_PAIRS] = [
-                (feature, str(existing_states.get(feature, "")))
-                for feature in existing_features
-            ]
-        pairs: list[tuple[str, str]] = list(self._draft.get(_DRAFT_FEATURE_PAIRS, []))
+        )
+        if user_input is not None and "action" in user_input:
+            action = str(user_input.get("action", "")).strip()
+            if action == "add":
+                return await self.async_step_features_add()
+            if action == "edit":
+                return await self.async_step_features_edit()
+            if action == "delete":
+                return await self.async_step_features_delete()
 
+        # Backward-compatible direct submit path (used by existing tests/integrations).
+        if user_input is not None and ("feature" in user_input or "state" in user_input):
+            if str(user_input.get("state", "")).strip() == "":
+                return await self.async_step_features_delete({"feature": user_input.get("feature")})
+            return await self.async_step_features_add(user_input)
+
+        current_features = ", ".join(f"{feature}={state}" for feature, state in pairs) or "none"
+        return self.async_show_form(
+            step_id="features",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("action", default="edit"): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                selector.SelectOptionDict(value="edit", label="Edit Feature"),
+                                selector.SelectOptionDict(value="delete", label="Delete Feature"),
+                                selector.SelectOptionDict(value="add", label="Add Feature"),
+                            ],
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                }
+            ),
+            description_placeholders={"current_features": current_features},
+        )
+
+    async def async_step_features_add(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        errors: dict[str, str] = {}
+        pairs = self._ensure_draft_pairs()
         default_feature = ""
         default_state = ""
         default_threshold = float(
@@ -496,7 +567,6 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
                 ),
             )
         )
-
         if user_input is not None:
             raw_feature = user_input.get("feature")
             feature_values = _normalize_feature_input(raw_feature)
@@ -513,15 +583,12 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
             if not errors:
                 self._draft[CONF_THRESHOLD] = default_threshold
                 existing = {item[0]: index for index, item in enumerate(pairs)}
-                if state == "":
-                    pairs = [pair for pair in pairs if pair[0] not in set(feature_values)]
-                else:
-                    for feature in feature_values:
-                        if feature in existing:
-                            pairs[existing[feature]] = (feature, state)
-                        else:
-                            pairs.append((feature, state))
-                            existing[feature] = len(pairs) - 1
+                for feature in feature_values:
+                    if feature in existing:
+                        pairs[existing[feature]] = (feature, state)
+                    else:
+                        pairs.append((feature, state))
+                        existing[feature] = len(pairs) - 1
                 self._draft[_DRAFT_FEATURE_PAIRS] = pairs
                 return await self.async_step_finish_features()
 
@@ -529,7 +596,7 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
             default_state = state
 
         return self.async_show_form(
-            step_id="features",
+            step_id="features_add",
             data_schema=_build_features_schema(default_feature, default_state, default_threshold),
             errors=errors,
             description_placeholders={
@@ -537,40 +604,111 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
             },
         )
 
+    async def async_step_features_edit(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        pairs = self._ensure_draft_pairs()
+        pair_map = {feature: state for feature, state in pairs}
+        default_threshold = float(
+            self._draft.get(
+                CONF_THRESHOLD,
+                self._config_entry.options.get(
+                    CONF_THRESHOLD,
+                    self._config_entry.data.get(CONF_THRESHOLD, DEFAULT_THRESHOLD),
+                ),
+            )
+        )
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            feature = str(user_input.get("feature", "")).strip()
+            state = str(user_input.get("state", "")).strip()
+            threshold = float(user_input.get(CONF_THRESHOLD, default_threshold))
+            if not feature:
+                errors["feature"] = "required"
+            if state == "":
+                errors["state"] = "required"
+            if not errors:
+                self._draft[CONF_THRESHOLD] = threshold
+                updated_pairs = [(name, state if name == feature else value) for name, value in pairs]
+                self._draft[_DRAFT_FEATURE_PAIRS] = updated_pairs
+                return self._persist_pairs(pairs=updated_pairs, threshold=threshold)
+            default_threshold = threshold
+
+        default_feature = pairs[0][0] if pairs else ""
+        default_state = pair_map.get(default_feature, "")
+        return self.async_show_form(
+            step_id="features_edit",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("feature", default=default_feature): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                selector.SelectOptionDict(value=name, label=name)
+                                for name, _ in pairs
+                            ],
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                    vol.Required("state", default=default_state): str,
+                    vol.Optional(CONF_THRESHOLD, default=default_threshold): vol.Coerce(float),
+                }
+            ),
+            errors=errors,
+        )
+
+    async def async_step_features_delete(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        pairs = self._ensure_draft_pairs()
+        default_threshold = float(
+            self._draft.get(
+                CONF_THRESHOLD,
+                self._config_entry.options.get(
+                    CONF_THRESHOLD,
+                    self._config_entry.data.get(CONF_THRESHOLD, DEFAULT_THRESHOLD),
+                ),
+            )
+        )
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            feature = str(user_input.get("feature", "")).strip()
+            threshold = float(user_input.get(CONF_THRESHOLD, default_threshold))
+            if not feature:
+                errors["feature"] = "required"
+            if not errors:
+                remaining_pairs = [(name, value) for name, value in pairs if name != feature]
+                self._draft[CONF_THRESHOLD] = threshold
+                self._draft[_DRAFT_FEATURE_PAIRS] = remaining_pairs
+                return self._persist_pairs(pairs=remaining_pairs, threshold=threshold)
+            default_threshold = threshold
+
+        default_feature = pairs[0][0] if pairs else ""
+        return self.async_show_form(
+            step_id="features_delete",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("feature", default=default_feature): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                selector.SelectOptionDict(value=name, label=name)
+                                for name, _ in pairs
+                            ],
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                    vol.Optional(CONF_THRESHOLD, default=default_threshold): vol.Coerce(float),
+                }
+            ),
+            errors=errors,
+        )
+
     async def async_step_finish_features(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         del user_input
         pairs: list[tuple[str, str]] = list(self._draft.get(_DRAFT_FEATURE_PAIRS, []))
         if not pairs:
-            return self.async_create_entry(
-                title="",
-                data=self._merged_options(
-                    {
-                        CONF_REQUIRED_FEATURES: [],
-                        CONF_FEATURE_STATES: {},
-                        CONF_FEATURE_TYPES: {},
-                        CONF_STATE_MAPPINGS: {},
-                        CONF_THRESHOLD: float(self._draft.get(CONF_THRESHOLD, DEFAULT_THRESHOLD)),
-                    }
-                ),
+            return self._persist_pairs(
+                pairs=[],
+                threshold=float(self._draft.get(CONF_THRESHOLD, DEFAULT_THRESHOLD)),
             )
-
-        required_features, feature_states, feature_types, state_mappings = _pairs_to_feature_payload(pairs)
-        _LOGGER.debug(
-            "options_finish_features count=%d required_features=%s",
-            len(required_features),
-            required_features,
-        )
-        return self.async_create_entry(
-            title="",
-            data=self._merged_options(
-                {
-                    CONF_REQUIRED_FEATURES: required_features,
-                    CONF_FEATURE_STATES: feature_states,
-                    CONF_FEATURE_TYPES: feature_types,
-                    CONF_STATE_MAPPINGS: state_mappings,
-                    CONF_THRESHOLD: float(self._draft.get(CONF_THRESHOLD, DEFAULT_THRESHOLD)),
-                }
-            ),
+        return self._persist_pairs(
+            pairs=pairs,
+            threshold=float(self._draft.get(CONF_THRESHOLD, DEFAULT_THRESHOLD)),
         )
 
     async def async_step_diagnostics(self, user_input: dict[str, Any] | None = None) -> FlowResult:
