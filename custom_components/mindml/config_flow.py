@@ -42,6 +42,18 @@ from .paths import resolve_ml_db_path
 
 _DRAFT_FEATURE_PAIRS = "feature_pairs"
 _LOGGER = logging.getLogger(__name__)
+_SUPPORTED_OPTION_KEYS = {
+    CONF_REQUIRED_FEATURES,
+    CONF_FEATURE_STATES,
+    CONF_FEATURE_TYPES,
+    CONF_STATE_MAPPINGS,
+    CONF_THRESHOLD,
+    CONF_ML_DB_PATH,
+    CONF_ML_ARTIFACT_VIEW,
+    CONF_ML_FEATURE_SOURCE,
+    CONF_ML_FEATURE_VIEW,
+    CONF_ROLLING_WINDOW_HOURS,
+}
 
 def _normalize_feature_input(raw_feature: Any) -> list[str]:
     if isinstance(raw_feature, str):
@@ -329,9 +341,15 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
                 self._existing_value(CONF_ROLLING_WINDOW_HOURS, DEFAULT_ROLLING_WINDOW_HOURS)
             ),
         }
-        merged.update(dict(self._config_entry.options))
+        merged.update(
+            {
+                key: value
+                for key, value in dict(self._config_entry.options).items()
+                if key in _SUPPORTED_OPTION_KEYS
+            }
+        )
         merged.update(updates)
-        return merged
+        return {key: value for key, value in merged.items() if key in _SUPPORTED_OPTION_KEYS}
 
     def _ensure_draft_pairs(self) -> list[tuple[str, str]]:
         if _DRAFT_FEATURE_PAIRS not in self._draft:

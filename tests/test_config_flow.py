@@ -230,6 +230,30 @@ def test_options_flow_features_preserve_existing_ml_settings() -> None:
     assert updated["data"]["ml_feature_view"] == "vw_latest_feature_snapshot"
 
 
+def test_options_flow_drops_legacy_bed_presence_entity_option() -> None:
+    entry = MagicMock()
+    entry.options = {
+        "required_features": ["sensor.a"],
+        "feature_states": {"sensor.a": "22.5"},
+        "state_mappings": {},
+        "feature_types": {"sensor.a": "numeric"},
+        "threshold": 50.0,
+        "ml_db_path": "/tmp/ha_ml_data_layer.db",
+        "ml_artifact_view": "vw_lightgbm_latest_model_artifact",
+        "ml_feature_source": "ml_snapshot",
+        "ml_feature_view": "vw_latest_feature_snapshot",
+        "bed_presence_entity": "binary_sensor.bed",
+    }
+    entry.data = {}
+
+    flow = ClrOptionsFlow(entry)
+    updated = asyncio.run(flow.async_step_decision({"threshold": 72.5}))
+
+    assert updated["type"] == "create_entry"
+    assert updated["data"]["threshold"] == 72.5
+    assert "bed_presence_entity" not in updated["data"]
+
+
 def test_user_step_allows_blank_ml_db_path_and_continues(monkeypatch, tmp_path) -> None:
     flow = _new_flow()
     discovered_db = tmp_path / "ha_ml_data_layer.db"

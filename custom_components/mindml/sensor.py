@@ -293,6 +293,17 @@ class CalibratedLogisticRegressionSensor(SensorEntity, RestoreEntity):
         self._missing_features = list(feature_vector.missing_features)
         self._last_computed_at = now.astimezone(UTC).isoformat()
 
+        if self._feature_mismatch:
+            self._native_value = None
+            self._raw_probability = None
+            self._linear_score = None
+            self._feature_contributions = {}
+            self._unavailable_reason = "feature_mismatch"
+            self._is_above_threshold = None
+            self._decision = None
+            self._store_runtime_diagnostics()
+            return
+
         result = run_lightgbm_inference(
             feature_values=self._feature_values,
             missing_features=self._missing_features,

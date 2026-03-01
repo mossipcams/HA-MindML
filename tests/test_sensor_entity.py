@@ -399,6 +399,7 @@ def test_sensor_warns_on_feature_mismatch_and_keeps_config_features(
     )
 
     sensor = CalibratedLogisticRegressionSensor(hass, entry)
+    sensor._recompute_state(datetime.now())
     # Config is single source of truth — features stay as configured
     assert sensor._required_features == ["sensor.a", "sensor.b"]
     # Mismatch is surfaced in diagnostics
@@ -406,6 +407,8 @@ def test_sensor_warns_on_feature_mismatch_and_keeps_config_features(
     assert attrs["feature_mismatch"] is not None
     assert "event_count" in attrs["feature_mismatch"]
     assert "sensor.a" in attrs["feature_mismatch"]
+    assert sensor.native_value is None
+    assert attrs["unavailable_reason"] == "feature_mismatch"
 
 
 def test_sensor_no_feature_mismatch_when_features_match(
