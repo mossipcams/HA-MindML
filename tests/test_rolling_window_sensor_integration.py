@@ -22,7 +22,6 @@ def _build_entry() -> MagicMock:
         "ml_db_path": "/tmp/ha_ml_data_layer.db",
         "ml_artifact_view": "vw_clr_latest_model_artifact",
         "ml_feature_source": "hass_state",
-        "bed_presence_entity": "",
     }
     entry.options = {}
     return entry

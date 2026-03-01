@@ -45,18 +45,6 @@ def test_features_step_description_mentions_inline_states() -> None:
     assert "one feature" in options_add_description.casefold()
 
 
-def test_strings_include_bed_presence_entity_label() -> None:
-    path = Path("custom_components/mindml/strings.json")
-    strings = json.loads(path.read_text())
-
-    config_user_data = strings["config"]["step"]["user"]["data"]
-    options_model_data = strings["options"]["step"]["model"]["data"]
-
-    assert "bed_presence_entity" in config_user_data
-    assert config_user_data["bed_presence_entity"] == "Bed Presence Entity"
-    assert "bed_presence_entity" in options_model_data
-
-
 def test_options_features_strings_include_management_action() -> None:
     path = Path("custom_components/mindml/strings.json")
     strings = json.loads(path.read_text())

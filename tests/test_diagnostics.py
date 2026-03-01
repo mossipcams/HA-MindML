@@ -28,7 +28,6 @@ def test_diagnostics_returns_structured_payload_with_redaction() -> None:
         "name": "Kitchen MindML",
         "ml_db_path": "/config/ha_ml_data_layer.db",
         "required_features": ["sensor.a"],
-        "bed_presence_entity": "binary_sensor.bedtime",
     }
     entry.options = {"threshold": 60.0}
 
@@ -37,5 +36,4 @@ def test_diagnostics_returns_structured_payload_with_redaction() -> None:
     assert payload["entry"]["entry_id"] == "entry-1"
     assert payload["entry"]["title"] == "Kitchen MindML"
     assert payload["config"]["data"]["ml_db_path"] == "**REDACTED**"
-    assert payload["config"]["data"]["bed_presence_entity"] == "binary_sensor.bedtime"
     assert payload["runtime"]["status"] == "ok"

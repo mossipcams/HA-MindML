@@ -27,7 +27,6 @@ def _build_entry() -> MagicMock:
         "ml_db_path": "/tmp/ha_ml_data_layer.db",
         "ml_artifact_view": "vw_clr_latest_model_artifact",
         "ml_feature_source": "hass_state",
-        "bed_presence_entity": "binary_sensor.bedtime",
     }
     entry.options = {}
     return entry
@@ -122,7 +121,6 @@ def test_sensor_updates_probability_attributes(monkeypatch) -> None:
     assert attrs["training_status"] == "completed"
     assert attrs["training_row_count"] == 10
     assert attrs["training_day_count"] == 3
-    assert attrs["bed_presence_entity"] == "binary_sensor.bedtime"
     assert attrs["feature_values"]["sensor.a"] == 2.0
     assert attrs["decision"] in {"positive", "negative"}
 
@@ -368,3 +366,77 @@ def test_sensor_surfaces_model_artifact_error_reason(monkeypatch) -> None:
     assert sensor.available is True
     assert attrs["model_artifact_error"] is not None
     assert attrs["unavailable_reason"] == "model_artifact_error"
+
+
+def test_sensor_warns_on_feature_mismatch_and_keeps_config_features(
+    monkeypatch,
+) -> None:
+    hass = MagicMock()
+    entry = _build_entry()
+    entry.data["ml_feature_source"] = "ml_snapshot"
+
+    class _Provider:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+        def load(self):
+            from custom_components.mindml.lightgbm_inference import LightGBMModelSpec
+            from custom_components.mindml.model_provider import ModelProviderResult
+
+            return ModelProviderResult(
+                model=LightGBMModelSpec(
+                    feature_names=["event_count", "on_ratio"],
+                    model_payload={"intercept": 0.0, "weights": [0.0, 0.0]},
+                ),
+                source="ml_data_layer",
+                artifact_error=None,
+                artifact_meta={},
+            )
+
+    monkeypatch.setattr(
+        "custom_components.mindml.sensor.SqliteLightGBMModelProvider",
+        _Provider,
+    )
+
+    sensor = CalibratedLogisticRegressionSensor(hass, entry)
+    # Config is single source of truth — features stay as configured
+    assert sensor._required_features == ["sensor.a", "sensor.b"]
+    # Mismatch is surfaced in diagnostics
+    attrs = sensor.extra_state_attributes
+    assert attrs["feature_mismatch"] is not None
+    assert "event_count" in attrs["feature_mismatch"]
+    assert "sensor.a" in attrs["feature_mismatch"]
+
+
+def test_sensor_no_feature_mismatch_when_features_match(
+    monkeypatch,
+) -> None:
+    hass = MagicMock()
+    entry = _build_entry()
+
+    class _Provider:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+        def load(self):
+            from custom_components.mindml.lightgbm_inference import LightGBMModelSpec
+            from custom_components.mindml.model_provider import ModelProviderResult
+
+            return ModelProviderResult(
+                model=LightGBMModelSpec(
+                    feature_names=["sensor.a", "sensor.b"],
+                    model_payload={"intercept": 0.0, "weights": [0.0, 0.0]},
+                ),
+                source="ml_data_layer",
+                artifact_error=None,
+                artifact_meta={},
+            )
+
+    monkeypatch.setattr(
+        "custom_components.mindml.sensor.SqliteLightGBMModelProvider",
+        _Provider,
+    )
+
+    sensor = CalibratedLogisticRegressionSensor(hass, entry)
+    attrs = sensor.extra_state_attributes
+    assert attrs["feature_mismatch"] is None

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import Any
 
@@ -13,7 +14,6 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import (
-    CONF_BED_PRESENCE_ENTITY,
     CONF_ROLLING_WINDOW_HOURS,
     CONF_FEATURE_STATES,
     CONF_FEATURE_TYPES,
@@ -38,6 +38,8 @@ from .ingestion_rules import sync_ingestion_rules
 from .lightgbm_inference import LightGBMModelSpec, run_lightgbm_inference
 from .model_provider import ModelProviderResult, SqliteLightGBMModelProvider
 from .paths import resolve_ml_db_path
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
@@ -75,7 +77,6 @@ class CalibratedLogisticRegressionSensor(SensorEntity, RestoreEntity):
         self._ml_feature_view = str(
             config.get(CONF_ML_FEATURE_VIEW, DEFAULT_ML_FEATURE_VIEW)
         ).strip() or DEFAULT_ML_FEATURE_VIEW
-        self._bed_presence_entity = str(config.get(CONF_BED_PRESENCE_ENTITY, "")).strip()
 
         requested_features = list(config.get(CONF_REQUIRED_FEATURES, []))
         model_provider = SqliteLightGBMModelProvider(
@@ -107,8 +108,13 @@ class CalibratedLogisticRegressionSensor(SensorEntity, RestoreEntity):
             self._ingestion_sync_error = str(exc)
 
         self._required_features: list[str] = list(config.get(CONF_REQUIRED_FEATURES, []))
-        if self._model.feature_names and self._ml_feature_source == "ml_snapshot":
-            self._required_features = list(self._model.feature_names)
+        self._feature_mismatch: str | None = None
+        if self._model.feature_names and set(self._model.feature_names) != set(self._required_features):
+            self._feature_mismatch = (
+                f"Model features {sorted(self._model.feature_names)} "
+                f"do not match configured features {sorted(self._required_features)}"
+            )
+            _LOGGER.warning("Feature mismatch: %s", self._feature_mismatch)
 
         self._feature_types: dict[str, str] = {
             feature_id: str(feature_type).strip().casefold()
@@ -250,7 +256,7 @@ class CalibratedLogisticRegressionSensor(SensorEntity, RestoreEntity):
             "model_artifact_meta": dict(self._model_artifact_meta),
             "feature_source": self._ml_feature_source,
             "feature_view": self._ml_feature_view,
-            "bed_presence_entity": self._bed_presence_entity,
+            "feature_mismatch": self._feature_mismatch,
             "rolling_window_hours": self._rolling_window_hours,
             "rolling_window_event_count": self._rolling_window_tracker.event_count if self._rolling_window_tracker else None,
             "ingestion_rules_count": self._ingestion_rules_count,

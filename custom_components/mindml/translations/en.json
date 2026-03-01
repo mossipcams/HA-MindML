@@ -10,8 +10,7 @@
           "ml_db_path": "ML DB path",
           "ml_artifact_view": "ML artifact view",
           "ml_feature_source": "Runtime feature source",
-          "ml_feature_view": "Feature snapshot view",
-          "bed_presence_entity": "Bed Presence Entity"
+          "ml_feature_view": "Feature snapshot view"
         }
       },
       "features": {
@@ -49,8 +48,7 @@
         "title": "Model",
         "data": {
           "ml_db_path": "ML DB path",
-          "ml_artifact_view": "ML artifact view",
-          "bed_presence_entity": "Bed Presence Entity"
+          "ml_artifact_view": "ML artifact view"
         }
       },
       "feature_source": {

@@ -60,7 +60,6 @@ def test_options_feature_source_persists_rolling_window_hours() -> None:
         "ml_artifact_view": "vw_clr_latest_model_artifact",
         "ml_feature_source": "hass_state",
         "ml_feature_view": "vw_latest_feature_snapshot",
-        "bed_presence_entity": "",
         "rolling_window_hours": 7.0,
     }
     config_entry.options = {}
